@@ -71,7 +71,8 @@ class UiPreviewTest {
                     onRequestNotifications = {},
                     onOpenExactAlarmSettings = {},
                     onOpenFullScreenSettings = {},
-                    onOpenAppSettings = {}
+                    onOpenAppSettings = {},
+                    onOpenBatterySettings = {}
                 )
             }
         }
@@ -209,6 +210,38 @@ class UiPreviewTest {
                 .fetchSemanticsNodes().isNotEmpty()
         )
         capture("about-360")
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h800dp-xhdpi")
+    fun phoneSettings() {
+        showHome()
+        compose.onNodeWithText("设置").performClick()
+        compose.waitForIdle()
+        assertTrue(
+            compose.onAllNodesWithText("系统权限").fetchSemanticsNodes().isNotEmpty()
+        )
+        assertTrue(
+            compose.onAllNodesWithText("别让系统把它清掉").fetchSemanticsNodes().isNotEmpty()
+        )
+        capture("settings-360")
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h800dp-xhdpi")
+    fun phoneSettingsTestRing() {
+        showHome()
+        compose.onNodeWithText("设置").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("10 秒后响铃").performScrollTo().performClick()
+        compose.waitForIdle()
+        // The confirmation names the reminder that will ring, so the user can
+        // tell the test apart from a real reminder when it fires.
+        val hint = "「交电费」将在 10 秒后响铃。"
+        assertTrue(compose.onAllNodesWithText(hint).fetchSemanticsNodes().isNotEmpty())
+        compose.onNodeWithText(hint).performScrollTo()
+        compose.waitForIdle()
+        capture("settings-test-360")
     }
 
     private fun alarmForRinging() = Alarm(

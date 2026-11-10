@@ -37,6 +37,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -66,7 +67,8 @@ fun AnqiRoot(
     onRequestNotifications: () -> Unit,
     onOpenExactAlarmSettings: () -> Unit,
     onOpenFullScreenSettings: () -> Unit,
-    onOpenAppSettings: () -> Unit
+    onOpenAppSettings: () -> Unit,
+    onOpenBatterySettings: () -> Unit
 ) {
     var editing by remember { mutableStateOf<Alarm?>(null) }
     var creating by remember { mutableStateOf(false) }
@@ -78,7 +80,7 @@ fun AnqiRoot(
     var tab by remember { mutableStateOf(CalendarTab.ALL) }
     var focusDate by remember { mutableStateOf(LocalDate.now()) }
     var monthAnchor by remember { mutableStateOf(YearMonth.now()) }
-    var yearAnchor by remember { mutableStateOf(LocalDate.now().year) }
+    var yearAnchor by remember { mutableIntStateOf(LocalDate.now().year) }
     var weekAnchor by remember { mutableStateOf(CalendarProjector.weekStart(LocalDate.now())) }
     var newSeed by remember { mutableStateOf<Alarm?>(null) }
 
@@ -265,7 +267,8 @@ fun AnqiRoot(
                         onRequestNotifications = onRequestNotifications,
                         onOpenExactAlarmSettings = onOpenExactAlarmSettings,
                         onOpenFullScreenSettings = onOpenFullScreenSettings,
-                        onOpenAppSettings = onOpenAppSettings
+                        onOpenAppSettings = onOpenAppSettings,
+                        onOpenBatterySettings = onOpenBatterySettings
                     )
                 }
             }
@@ -280,7 +283,8 @@ fun AnqiRoot(
                 onRequestNotifications = onRequestNotifications,
                 onOpenExactAlarmSettings = onOpenExactAlarmSettings,
                 onOpenFullScreenSettings = onOpenFullScreenSettings,
-                onOpenAppSettings = onOpenAppSettings
+                onOpenAppSettings = onOpenAppSettings,
+                onOpenBatterySettings = onOpenBatterySettings
             )
         } else {
             mainTabs(Modifier.fillMaxSize(), false)
@@ -336,7 +340,8 @@ private fun DetailPane(
     onRequestNotifications: () -> Unit,
     onOpenExactAlarmSettings: () -> Unit,
     onOpenFullScreenSettings: () -> Unit,
-    onOpenAppSettings: () -> Unit
+    onOpenAppSettings: () -> Unit,
+    onOpenBatterySettings: () -> Unit
 ) {
     if (settings) {
         SettingsScreen(
@@ -345,7 +350,8 @@ private fun DetailPane(
             onRequestNotifications = onRequestNotifications,
             onOpenExactAlarmSettings = onOpenExactAlarmSettings,
             onOpenFullScreenSettings = onOpenFullScreenSettings,
-            onOpenAppSettings = onOpenAppSettings
+            onOpenAppSettings = onOpenAppSettings,
+            onOpenBatterySettings = onOpenBatterySettings
         )
     } else {
         // Keep the new-alarm draft stable while the host recomposes (for example

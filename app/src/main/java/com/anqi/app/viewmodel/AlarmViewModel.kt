@@ -85,6 +85,17 @@ class AlarmViewModel(application: Application) : AndroidViewModel(application) {
         snoozeMinutes = store.snoozeMinutes
     }
 
+    /**
+     * Rings the first enabled reminder ten seconds from now without touching
+     * its schedule. Returns the reminder used, or null when there is nothing to
+     * test with — the settings screen turns that into a readable hint.
+     */
+    fun scheduleTestRing(): Alarm? {
+        val target = alarms.firstOrNull { it.enabled } ?: return null
+        scheduler.scheduleTestRing(target)
+        return target
+    }
+
     fun upcoming(limit: Int = 3): List<Pair<Alarm, java.time.ZonedDateTime>> {
         val now = java.time.ZonedDateTime.now()
         return alarms.asSequence()

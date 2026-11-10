@@ -11,6 +11,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.net.toUri
 import androidx.lifecycle.ViewModelProvider
+import com.anqi.app.alarm.AlarmScheduler
+import com.anqi.app.alarm.RingtoneService
 import com.anqi.app.ui.AnqiRoot
 import com.anqi.app.ui.theme.AnqiTheme
 import com.anqi.app.viewmodel.AlarmViewModel
@@ -19,6 +21,15 @@ class MainActivity : ComponentActivity() {
     private val viewModel: AlarmViewModel by lazy {
         ViewModelProvider(this)[AlarmViewModel::class.java]
     }
+
+    /**
+     * The ring we already pushed [AlarmActivity] for. Keyed by the ring token,
+     * not the alarm id, so a snoozed alarm that rings again still takes over
+     * the screen. Without it the activity would bounce the user right back
+     * into the ring screen after every dismissal, because the service may not
+     * have torn down yet.
+     */
+    private var routedRingToken = 0L
 
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -57,10 +68,35 @@ class MainActivity : ComponentActivity() {
                             openAppSettings()
                         }
                     },
-                    onOpenAppSettings = ::openAppSettings
+                    onOpenAppSettings = ::openAppSettings,
+                    onOpenBatterySettings = ::openBatterySettings
                 )
             }
         }
+        openRingingAlarmIfAny()
+    }
+
+    /**
+     * If an alarm is ringing right now, the list is the wrong screen to land on.
+     * Opening the app (from the launcher, a notification, anywhere) should lead
+     * straight to the dismiss screen instead of making the user hunt for it.
+     */
+    private fun openRingingAlarmIfAny() {
+        val id = RingtoneService.activeAlarmId
+        val token = RingtoneService.activeRingToken
+        if (id <= 0L) {
+            // Nothing ringing any more: forget the routing so the next ring of
+            // the same alarm (a snooze, say) still takes over the screen.
+            routedRingToken = 0L
+            return
+        }
+        if (token == routedRingToken) return
+        routedRingToken = token
+        startActivity(
+            Intent(this, AlarmActivity::class.java)
+                .putExtra(AlarmScheduler.EXTRA_ID, id)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
     }
 
     private fun openAppSettings() {
@@ -70,8 +106,24 @@ class MainActivity : ComponentActivity() {
             .onFailure { startActivity(Intent(Settings.ACTION_SETTINGS)) }
     }
 
+    /**
+     * Deliberately opens the system battery-optimisation list instead of asking
+     * for `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`: the direct whitelist dialog is
+     * a Play policy violation, while pointing at the list is both allowed and
+     * what actually helps on ROMs that kill background apps.
+     */
+    private fun openBatterySettings() {
+        val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+        runCatching { startActivity(intent) }
+            .onFailure { openAppSettings() }
+    }
+
     override fun onResume() {
         super.onResume()
         viewModel.refreshReadiness()
+        // Also check here, not only in onCreate: the app may already be alive
+        // (and simply backgrounded) when the full-screen intent gets blocked,
+        // in which case onCreate never runs again.
+        openRingingAlarmIfAny()
     }
 }

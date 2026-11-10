@@ -1,8 +1,10 @@
 package com.anqi.app.alarm
 
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
@@ -29,6 +31,8 @@ class RingtoneService : Service() {
     private var screenLock: PowerManager.WakeLock? = null
     private val handler = Handler(Looper.getMainLooper())
     private var currentAlarmId: Long = -1L
+    private var currentAlarm: Alarm? = null
+    private var unlockReceiver: BroadcastReceiver? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -49,6 +53,9 @@ class RingtoneService : Service() {
         }
 
         currentAlarmId = alarm.id
+        currentAlarm = alarm
+        activeAlarmId = alarm.id
+        nextRingToken()
         val notification = AlarmNotifier.build(this, alarm)
         try {
             startForeground(AlarmNotifier.NOTIFICATION_BASE + alarm.id.toInt(), notification)
@@ -67,9 +74,48 @@ class RingtoneService : Service() {
         // Some OEMs ignore full-screen notifications. Open the ringing screen
         // directly from the foreground service so the alarm is always dismissible.
         AlarmNotifier.launch(this, alarm)
+        watchForUnlock()
         handler.removeCallbacks(stopRunnable)
         handler.postDelayed(stopRunnable, AUTO_STOP_MS)
         return START_NOT_STICKY
+    }
+
+    /**
+     * The one case the full-screen intent cannot cover: the ROM refuses to put
+     * the ring screen above the lock screen, so the user has to unlock before
+     * they can reach it. Watching for the unlock and re-opening the screen at
+     * that exact moment is the difference between "it is right there" and
+     * "unlock, then go hunting in the launcher" — which is what the user
+     * actually complained about.
+     *
+     * Registered at runtime on purpose: a manifest receiver for
+     * ACTION_USER_PRESENT would wake us up for every unlock of the day.
+     */
+    private fun watchForUnlock() {
+        if (unlockReceiver != null) return
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (intent.action != Intent.ACTION_USER_PRESENT) return
+                val alarm = currentAlarm ?: return
+                Log.i(TAG, "Unlocked while ringing; bringing the alarm forward")
+                AlarmNotifier.launch(this@RingtoneService, alarm)
+            }
+        }
+        unlockReceiver = receiver
+        runCatching {
+            ContextCompat.registerReceiver(
+                this,
+                receiver,
+                IntentFilter(Intent.ACTION_USER_PRESENT),
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+        }.onFailure { Log.w(TAG, "Unable to watch for unlock", it) }
+    }
+
+    private fun stopWatchingForUnlock() {
+        val receiver = unlockReceiver ?: return
+        unlockReceiver = null
+        runCatching { unregisterReceiver(receiver) }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -79,6 +125,9 @@ class RingtoneService : Service() {
         stopSound()
         stopVibration()
         releaseWakeLock()
+        stopWatchingForUnlock()
+        currentAlarm = null
+        activeAlarmId = -1L
         super.onDestroy()
     }
 
@@ -202,6 +251,31 @@ class RingtoneService : Service() {
         private const val AUTO_STOP_MS = 5 * 60_000L
         private const val SCREEN_WAKE_MS = 30_000L
         const val ACTION_STOP = "com.anqi.app.action.STOP_RINGING"
+
+        /**
+         * Id of the alarm currently ringing, or -1. The ring screen is normally
+         * opened by the full-screen intent, but when the ROM blocks that the
+         * user is left staring at the launcher while the phone screams. This
+         * lets the main activity notice "something is ringing right now" and
+         * jump straight to the dismiss screen as soon as it is opened.
+         */
+        @Volatile
+        var activeAlarmId: Long = -1L
+            private set
+
+        /**
+         * Bumped for every ring, including a second ring of the same alarm
+         * after a snooze. Routing on the id alone would treat the snooze as
+         * "already handled" and leave the user on the list page.
+         */
+        @Volatile
+        var activeRingToken: Long = 0L
+            private set
+
+        private fun nextRingToken(): Long {
+            activeRingToken += 1
+            return activeRingToken
+        }
 
         fun start(context: Context, alarm: Alarm) {
             val intent = Intent(context, RingtoneService::class.java)

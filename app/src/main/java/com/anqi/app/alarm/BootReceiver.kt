@@ -17,6 +17,9 @@ class BootReceiver : BroadcastReceiver() {
         }
         val store = AlarmStore(context)
         AlarmNotifier.ensureChannel(context)
-        AlarmScheduler(context).rescheduleAll(store.all())
+        val scheduler = AlarmScheduler(context)
+        scheduler.rescheduleAll(store.all())
+        // A reboot clears every repeating registration, heartbeat included.
+        scheduler.scheduleHeartbeat()
     }
 }

@@ -46,10 +46,12 @@ fun SettingsScreen(
     onRequestNotifications: () -> Unit,
     onOpenExactAlarmSettings: () -> Unit,
     onOpenFullScreenSettings: () -> Unit,
-    onOpenAppSettings: () -> Unit
+    onOpenAppSettings: () -> Unit,
+    onOpenBatterySettings: () -> Unit
 ) {
     val readiness = viewModel.readiness
     var showAbout by remember { mutableStateOf(false) }
+    var testHint by remember { mutableStateOf<String?>(null) }
     BackHandler(enabled = showAbout) { showAbout = false }
     if (showAbout) {
         AboutScreen(onBack = { showAbout = false })
@@ -166,6 +168,33 @@ fun SettingsScreen(
                 }
             }
 
+            Spacer(Modifier.height(10.dp))
+            Surface(
+                color = Anqi.palette.raised,
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(18.dp)) {
+                    Text(
+                        "别让系统把它清掉",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Anqi.palette.ink
+                    )
+                    Spacer(Modifier.height(5.dp))
+                    Text(
+                        "清理后台等于把应用强制停止，系统会连闹钟一起清掉。三件事能避免漏响：加省电白名单、允许自启动、在最近任务里长按本应用卡片锁定它。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Anqi.palette.muted
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    AnqiTextButton(
+                        "打开省电设置",
+                        onClick = onOpenBatterySettings,
+                        color = Anqi.palette.signal
+                    )
+                }
+            }
+
             Spacer(Modifier.height(32.dp))
             SectionLabel("提醒")
             Spacer(Modifier.height(10.dp))
@@ -185,6 +214,47 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.labelMedium,
                 color = Anqi.palette.muted
             )
+
+            Spacer(Modifier.height(12.dp))
+            Surface(
+                color = Anqi.palette.raised,
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(18.dp)) {
+                    Text(
+                        "试一次",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Anqi.palette.ink
+                    )
+                    Spacer(Modifier.height(5.dp))
+                    Text(
+                        "十秒后响一次，不会改动任何闹钟的时间。响铃后把应用从后台清掉，再看它是否还响——这比等下个月更省事。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Anqi.palette.muted
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    AnqiTextButton(
+                        "10 秒后响铃",
+                        onClick = {
+                            val target = viewModel.scheduleTestRing()
+                            testHint = if (target == null) {
+                                "还没有开启的提醒，先新建一个再测。"
+                            } else {
+                                "「${target.label.ifBlank { "提醒" }}」将在 10 秒后响铃。"
+                            }
+                        },
+                        color = Anqi.palette.signal
+                    )
+                    testHint?.let { hint ->
+                        Text(
+                            hint,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Anqi.palette.signal
+                        )
+                    }
+                }
+            }
 
             Spacer(Modifier.height(22.dp))
             SectionLabel("关于")

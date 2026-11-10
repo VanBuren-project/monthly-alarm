@@ -10,6 +10,20 @@ import com.anqi.app.model.RepeatType
 
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        // The heartbeat carries no alarm id, so it has to be handled before the
+        // "every alarm broadcast knows which alarm it is about" guard below.
+        if (intent.action == AlarmScheduler.ACTION_HEARTBEAT) {
+            val store = AlarmStore(context)
+            AlarmNotifier.ensureChannel(context)
+            val scheduler = AlarmScheduler(context)
+            scheduler.rescheduleAll(store.all())
+            // Re-arm the heartbeat too: if its own registration was the thing
+            // that got cleared, this is the only chance to put it back.
+            scheduler.scheduleHeartbeat()
+            Log.i("AnqiReceiver", "Heartbeat re-armed ${store.all().size} alarm(s)")
+            return
+        }
+
         val id = intent.getLongExtra(AlarmScheduler.EXTRA_ID, -1L)
         if (id < 0) return
         val store = AlarmStore(context)
@@ -26,6 +40,13 @@ class AlarmReceiver : BroadcastReceiver() {
                 }
                 val updated = advance(context, alarm, now, store)
                 RingtoneService.start(context, updated)
+            }
+
+            AlarmScheduler.ACTION_TEST_FIRE -> {
+                // Same ring path as a real reminder, minus any state change: a
+                // test must not move the schedule, consume a repeat count or
+                // leave lastFiredAt behind.
+                RingtoneService.start(context, alarm)
             }
 
             AlarmScheduler.ACTION_SNOOZE_FIRE -> {

@@ -1,6 +1,5 @@
 package com.anqi.app
 
-import android.app.KeyguardManager
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -65,6 +64,13 @@ class AlarmActivity : ComponentActivity() {
      * to draw above the keyguard. `setTurnScreenOn` covers the first on API 27+;
      * the window flags are the pre-27 path and also cover ROMs that ignore the
      * newer API.
+     *
+     * Deliberately no keyguard dismissal: `requestDismissKeyguard` (and
+     * FLAG_DISMISS_KEYGUARD before it) puts the PIN/pattern pad *on top of* the
+     * ringing screen, which is exactly the "unlock first, then hunt for the app"
+     * detour this screen exists to avoid. With showWhenLocked alone the alarm is
+     * fully interactive above the lock screen and the keyguard simply reappears
+     * once the alarm is dismissed.
      */
     private fun showOverLockScreen() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
@@ -74,13 +80,8 @@ class AlarmActivity : ComponentActivity() {
         @Suppress("DEPRECATION")
         window.addFlags(
             WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
         )
-        // Dismissing is best-effort: on a secured lock screen the request is
-        // simply ignored, and the activity still shows above the keyguard.
-        val keyguard = getSystemService(KeyguardManager::class.java)
-        runCatching { keyguard?.requestDismissKeyguard(this, null) }
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
