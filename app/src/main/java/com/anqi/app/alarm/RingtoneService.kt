@@ -37,31 +37,53 @@ class RingtoneService : Service() {
     override fun onCreate() {
         super.onCreate()
         AlarmNotifier.ensureChannel(this)
+        Diag.log(this, "RING 响铃服务启动")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            RingResume.clear(this)
             stopSelf()
             return START_NOT_STICKY
         }
 
-        val alarmId = intent?.getLongExtra(AlarmScheduler.EXTRA_ID, -1L) ?: -1L
-        val alarm = AlarmStore(this).find(alarmId)
+        val requestedId = intent?.getLongExtra(AlarmScheduler.EXTRA_ID, -1L) ?: -1L
+        // A null intent means the system restarted us after reclaiming the
+        // process, which is exactly the case where the alarm was still ringing
+        // and the user never dismissed it. The age check matters just as much:
+        // resuming a stale mark would make the phone scream at some arbitrary
+        // later moment, which is worse than having stayed quiet.
+        val resuming = requestedId < 0L
+        val alarmId = when {
+            !resuming -> requestedId
+            RingResume.resumable(this) -> RingResume.marked(this)
+            else -> -1L
+        }
+        val alarm = if (alarmId >= 0L) AlarmStore(this).find(alarmId) else null
         if (alarm == null) {
+            RingResume.clear(this)
             stopSelf()
             return START_NOT_STICKY
+        }
+        if (resuming) {
+            Diag.log(this, "RING 响铃被打断后自动恢复", "#${alarm.id} · ${RingResume.age(this) / 1000} 秒")
         }
 
         currentAlarmId = alarm.id
         currentAlarm = alarm
+        RingResume.mark(this, alarm.id)
         activeAlarmId = alarm.id
         nextRingToken()
         val notification = AlarmNotifier.build(this, alarm)
         try {
             startForeground(AlarmNotifier.NOTIFICATION_BASE + alarm.id.toInt(), notification)
         } catch (t: Throwable) {
+            // Android 12+ refuses a foreground start from the background and many
+            // OEM ROMs refuse it outright. The notification then has to be the
+            // alarm itself, so it goes out on the channel that carries a sound.
             Log.e(TAG, "startForeground failed", t)
-            AlarmNotifier.notify(this, alarm)
+            Diag.log(this, "RING 前台启动被拒，改用有声通知")
+            AlarmNotifier.notify(this, alarm, audible = true)
         }
 
         if (player == null) startSound(alarm)
@@ -77,7 +99,10 @@ class RingtoneService : Service() {
         watchForUnlock()
         handler.removeCallbacks(stopRunnable)
         handler.postDelayed(stopRunnable, AUTO_STOP_MS)
-        return START_NOT_STICKY
+        // Not START_NOT_STICKY: a ringing alarm that gets killed with the app is
+        // the loudest possible bug. The system restarts the service with a null
+        // intent, and the persisted id above re-enters the ring.
+        return START_STICKY
     }
 
     /**
@@ -128,6 +153,7 @@ class RingtoneService : Service() {
         stopWatchingForUnlock()
         currentAlarm = null
         activeAlarmId = -1L
+        Diag.log(this, "RING 响铃服务结束")
         super.onDestroy()
     }
 
@@ -242,6 +268,7 @@ class RingtoneService : Service() {
 
     private val stopRunnable = Runnable {
         Log.i(TAG, "Alarm auto-stopped after timeout")
+        RingResume.clear(this)
         AlarmNotifier.cancel(this, currentAlarmId)
         stopSelf()
     }
@@ -278,17 +305,25 @@ class RingtoneService : Service() {
         }
 
         fun start(context: Context, alarm: Alarm) {
+            // Written before the start attempt, so a ring that is cut short by a
+            // kill still leaves a trace the restart path can pick up.
+            RingResume.mark(context, alarm.id)
+            Diag.log(context, "RING 开始响铃", "#${alarm.id}")
             val intent = Intent(context, RingtoneService::class.java)
                 .putExtra(AlarmScheduler.EXTRA_ID, alarm.id)
             try {
                 ContextCompat.startForegroundService(context, intent)
             } catch (t: Throwable) {
+                // No service, so nothing is looping the tone: the notification
+                // has to make the sound itself or the alarm is silent.
                 Log.e(TAG, "Unable to start ringing service", t)
-                AlarmNotifier.notify(context, alarm)
+                Diag.log(context, "RING 服务起不来，改用有声通知", "#${alarm.id}")
+                AlarmNotifier.notify(context, alarm, audible = true)
             }
         }
 
         fun stop(context: Context) {
+            RingResume.clear(context)
             context.stopService(Intent(context, RingtoneService::class.java))
         }
 

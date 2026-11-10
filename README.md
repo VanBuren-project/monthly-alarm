@@ -6,9 +6,11 @@
 
 ## 下载
 
-**[⬇ 下载 anqi-1.3.3.apk](https://github.com/VanBuren-project/monthly-alarm/releases/download/v1.3.3/anqi-1.3.3.apk)** · 7.1 MB
+**[⬇ 下载 anqi-1.3.2.apk](https://github.com/VanBuren-project/monthly-alarm/releases/download/v1.3.2/anqi-1.3.2.apk)** · 7.1 MB（最新稳定版）
 
-SHA-256：`5B35BA4F4CA20F2B0511B0833495E1DEDCA31B96B42229ADEE95108AEDFD5296`
+SHA-256：`BED7B94093CAB0189C19BF3251DB8C243BFBB2A5CDFF62B358D81108B9836700`
+
+> 1.3.3 与 1.3.4 已构建完成、等待真机验证，验证通过后再发布。这两版的改动说明见仓库根目录的 `release-notes-1.3.3.md` 与 `release-notes-1.3.4.md`。
 
 也可以到 [Releases](https://github.com/VanBuren-project/monthly-alarm/releases) 页面查看更新说明与校验文件。
 
@@ -43,7 +45,7 @@ SHA-256：`5B35BA4F4CA20F2B0511B0833495E1DEDCA31B96B42229ADEE95108AEDFD5296`
 
 - 应用名：月度闹钟
 - 包名：`com.anqi.app`
-- 版本：1.3.3（versionCode 8）
+- 版本：1.3.4（versionCode 9）
 - 最低系统：Android 8.0（API 26）
 - 目标系统：Android 16（API 36）
 - 构建：Kotlin + Jetpack Compose + Material 3，release 构建（正式发布证书，RSA 4096 / v2 签名）
@@ -76,12 +78,18 @@ SHA-256：`5B35BA4F4CA20F2B0511B0833495E1DEDCA31B96B42229ADEE95108AEDFD5296`
 
 ### 后台可靠性与锁屏
 
-- **每次进程启动都自愈**：打开应用、开机、改时间、改时区后，把所有已启用的提醒重新排一遍。被系统清掉一次的闹钟，下一次启动就会补回来
-- **六小时心跳**：排一个加少量随机抖动的 `setAndAllowWhileIdle` 一次性唤醒，醒来后重排全部提醒并续排下一次；Doze 期间同样会被投递。专门对付「被强停后应用再没被打开过」
+- **常驻守护**：一个低优先级前台服务 + 常驻通知让进程活下来，`AlarmManager` 里的登记才不会随进程一起被清掉。设置页有开关与状态显示，关掉会明确警告提醒不再可靠
+- **定时校检走另一套系统**：`JobScheduler` 中注册 15 分钟周期、`setPersisted(true)` 的作业，与 `AlarmManager` 完全独立；即使闹钟登记被扫掉，它仍会被系统叫起来重排队列，重启后也不用等开机广播
+- **记账与事后补响**：每次排闹钟都记下「答应过系统几点响」，每次醒来核对；发现某个时刻已过却从未触发，就在 12 小时窗口内补响一次，而不是等下个月
+- **每次进程启动都自愈**：打开应用、开机、改时间、改时区后，把所有已启用的提醒重新排一遍；审计先于重排，否则证据会被下一次触发时间覆盖
+- **六小时心跳**：排一个加少量随机抖动的 `setAndAllowWhileIdle` 一次性唤醒，醒来后重排全部提醒并续排下一次；Doze 期间同样会被投递
+- **响铃被杀也能回来**：响铃服务声明 `START_STICKY` 并把「正在响哪一条」带时间戳写盘；服务被杀后系统重启它会回到同一条提醒的响铃页，超过 6 分钟的旧记录直接作废，不会半夜凭空响
+- **兜底一定有声音**：前台服务起不来时改走的通知渠道带闹钟音频属性、可穿透勿扰；此前这条兜底是静音渠道，等于什么都没发生
 - **重排不会吃掉贪睡**：重排只清基础闹钟，不再取消进行中的贪睡
 - **锁屏直接关闭**：响铃页只声明 `showWhenLocked`，不请求解除锁屏，因此锁屏上就能点「停止 / 贪睡」，不会被 PIN 键盘盖住
 - **解锁即到前台**：响铃期间注册一次 `ACTION_USER_PRESENT` 广播（平时不监听），解锁瞬间主动拉起响铃页
 - **打开应用落到响铃页**：正在响铃时点图标直接进关闭页，由 ring token 判断，贪睡后再次响铃同样生效
+- **运行记录**：设置页底部是本机响铃流水账（进程启动、排闹钟成功/失败、心跳、作业校检、守护服务启停、补响、关闭），最多 240 行，可随时清空
 - **设置页引导**：省电白名单、自启动、最近任务锁定三件事的说明与跳转；另有「10 秒后响铃」用于真机自测，不改动任何提醒时间
 
 ### 日历视图
@@ -117,7 +125,7 @@ SHA-256：`5B35BA4F4CA20F2B0511B0833495E1DEDCA31B96B42229ADEE95108AEDFD5296`
 - [周视图 360dp](preview/week-360.png)
 - [周视图含提醒块](preview/week-event-360.png)
 - [关于与声明 360dp](preview/about-360.png)
-- [设置 360dp（权限与保活引导）](preview/settings-360.png)、[设置 360dp（试一次）](preview/settings-test-360.png)
+- [设置 360dp（权限与保活引导）](preview/settings-360.png)、[设置 360dp（试一次）](preview/settings-test-360.png)、[设置 360dp（运行记录）](preview/settings-diag-360.png)
 - [响铃页 360dp（深色）](preview/ringing-dark-360.png)、[响铃页 360dp（浅色）](preview/ringing-light-360.png)
 
 启动器图标按自适应图标前景层重新裁切居中，预览见 [`preview/icon-preview.png`](preview/icon-preview.png)。
@@ -132,7 +140,7 @@ SHA-256：`5B35BA4F4CA20F2B0511B0833495E1DEDCA31B96B42229ADEE95108AEDFD5296`
 
 ## 安装
 
-1. 从 [Releases](https://github.com/VanBuren-project/monthly-alarm/releases) 下载 `anqi-1.3.3.apk`（或使用自己构建的 `app/build/outputs/apk/release/app-release.apk`）传到手机。
+1. 从 [Releases](https://github.com/VanBuren-project/monthly-alarm/releases) 下载 `anqi-1.3.2.apk`（当前已发布版本），或使用自己构建的 `app/build/outputs/apk/release/app-release.apk` 传到手机。
 2. 如果手机上装过 1.3.0 或更早的调试证书版本，先卸载再安装（签名不同，无法覆盖）。
 3. 在系统设置中允许文件管理器/浏览器「安装未知应用」。
 3. 安装并打开「月度闹钟」。
@@ -140,7 +148,8 @@ SHA-256：`5B35BA4F4CA20F2B0511B0833495E1DEDCA31B96B42229ADEE95108AEDFD5296`
    - 通知权限
    - 精确闹钟（Android 12+）
    - 全屏提醒（Android 14+）
-5. **务必**再做一步：设置页 →「别让系统把它清掉」→「打开省电设置」，把本应用加入电池白名单并允许自启动；国产 ROM 还要在最近任务里长按应用卡片锁定它。
+5. 确认设置页「后台守护」为开启状态（状态栏会有一条常驻通知，这是保活机制的一部分，不要划掉它）。
+6. **务必**再做一步：设置页 →「别让系统把它清掉」→「打开省电设置」，把本应用加入电池白名单并允许自启动；国产 ROM 还要在最近任务里长按应用卡片锁定它。
 
 ### 第一次测试
 
@@ -192,7 +201,7 @@ distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-bin.zip
 仓库：<https://github.com/VanBuren-project/monthly-alarm>
 发布页：<https://github.com/VanBuren-project/monthly-alarm/releases>
 
-`v1.3.3` 的源码、APK、`RELEASE_NOTES.md` 与 `SHA256SUMS.txt` 将在真机验证通过后发布；此前已发布的 `v1.3.2` 保持不变。所有 APK 使用正式发布证书签名。
+`v1.3.2` 已发布并保持不变。`v1.3.3` 与 `v1.3.4` 的源码、APK、`RELEASE_NOTES.md` 与 `SHA256SUMS.txt` 将在真机验证通过后发布。所有 APK 使用正式发布证书签名。
 
 ### 签名与密钥
 
@@ -221,13 +230,13 @@ keyPassword=你的密码
 ## 已验证
 
 - `assembleRelease`：成功
-- `testDebugUnitTest`：7 个调度/心跳测试 + 7 个规则测试 + 11 个日历投影测试 + 13 个 Robolectric/Compose 界面测试，共 38 个，0 失败
-- 电脑端真实 Compose 渲染：360dp 所有/年/月/周/设置/响铃页、411dp 编辑器、840dp 双栏，截图见 `preview/`
+- `testDebugUnitTest`：7 个调度/心跳测试 + 7 个规则测试 + 7 个补响测试 + 11 个日历投影测试 + 10 个响铃恢复测试 + 6 个自愈测试 + 14 个 Robolectric/Compose 界面测试，共 62 个，0 失败
+- 电脑端真实 Compose 渲染：360dp 所有/年/月/周/设置（含后台守护与运行记录）/响铃页、411dp 编辑器、840dp 双栏，截图见 `preview/`
 - `lintDebug`：0 errors，6 warnings（4 条依赖版本、2 条 adaptive icon monochrome）
 - APK：`zipalign` 通过，APK Signature Scheme v2 验签通过（正式证书 `4B:0D:89:66:F9:7B:C2:1C:A1:94:F7:95:27:7C:DF:6B:AC:82:34:27:F4:F2:82:48:C2:69:93:20:3F:7C:40:A0`）
-- 包名 `com.anqi.app`、应用名「月度闹钟」、版本 1.3.3（versionCode 8）、minSdk 26 / targetSdk 36 已用 `aapt2 dump badging` 核对；`ACTION_HEARTBEAT`、`scheduleHeartbeat`、`scheduleTestRing`、`openRingingAlarmIfAny` 已在 APK 的 dex 中确认存在
+- 包名 `com.anqi.app`、应用名「月度闹钟」、版本 1.3.4（versionCode 9）、minSdk 26 / targetSdk 36 已用 `aapt2 dump badging` 核对；`GuardService`、`GuardJob`、`ArmLedger`、`RingResume`、`FOREGROUND_SERVICE_SPECIAL_USE`、`scheduleHeartbeat`、`openRingingAlarmIfAny` 已在 APK 的 manifest 与 dex 中确认存在
 
-**未验证**：本机没有可用的硬件加速模拟器（AEHD 安装需要管理员/UAC 授权），也没有连接 Android 手机，因此自动化环节未覆盖真机锁屏响铃和国产 ROM 后台限制的实机验收（作者已在自用手机上手工验证 1.3.0 的日常响铃）。
+**未验证**：本机没有可用的硬件加速模拟器（AEHD 安装需要管理员/UAC 授权），也没有连接 Android 手机，因此自动化环节未覆盖真机锁屏响铃和国产 ROM 后台限制的实机验收（作者已在自用手机上手工验证 1.3.0 的日常响铃）。1.3.4 的常驻守护、`JobScheduler` 校检、补响与响铃恢复均有 Robolectric 单测覆盖，但「清后台后是否仍响」仍需真机确认——设置页的「运行记录」就是为此准备的。
 
 ## 已知限制 / 下一版
 
@@ -239,7 +248,8 @@ keyPassword=你的密码
 - 没有提前提醒、多个提前提醒、Wear OS
 - 上架应用商店需要额外准备隐私政策、商店素材，并用 AAB 提交
 - 未做 TalkBack 全量走查；已处理主要触控高度、字体缩放和窄屏溢出
-- **强制停止无法自动恢复**：被系统 force-stop 的应用（含「清理后台」等价于强停的 ROM）不能执行任何代码，闹钟与心跳都会一并被清除，这是 Android 平台限制，第三方应用无法自行恢复。加电池白名单、允许自启动、锁定最近任务是唯一有效手段
+- 常驻通知是保活的代价：它被设计成无声音、不弹横幅，但会在状态栏占一格；关掉「后台守护」就等于放弃第一层保活
+- **强制停止无法自动恢复**：被系统 force-stop 的应用（含「清理后台」等价于强停的 ROM）不能执行任何代码，任何第三方应用都无法在被强停期间自行恢复。1.3.4 用常驻前台服务、独立的 `JobScheduler` 作业、事后补响三条路把它压到最低，但唯一彻底的手段仍是让它不被强停：加电池白名单、允许自启动、锁定最近任务
 
 ## 目录
 

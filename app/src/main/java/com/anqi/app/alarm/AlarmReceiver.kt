@@ -5,8 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.anqi.app.data.AlarmStore
-import com.anqi.app.model.Alarm
-import com.anqi.app.model.RepeatType
 
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -20,6 +18,18 @@ class AlarmReceiver : BroadcastReceiver() {
             // Re-arm the heartbeat too: if its own registration was the thing
             // that got cleared, this is the only chance to put it back.
             scheduler.scheduleHeartbeat()
+            // And put the foreground guard back: reaching this code at all means
+            // the process was gone, so the guard was torn down with it.
+            GuardService.start(context)
+            GuardJob.schedule(context)
+            // Reaching this code proves the process was dead until now, so this
+            // is exactly the right moment to notice and repair a silent skip.
+            val late = CatchUp.run(context)
+            Diag.log(
+                context,
+                "HEARTBEAT 心跳补排",
+                "${store.all().size} 个提醒${if (late > 0) "，补响 $late 个" else ""}"
+            )
             Log.i("AnqiReceiver", "Heartbeat re-armed ${store.all().size} alarm(s)")
             return
         }
@@ -38,18 +48,20 @@ class AlarmReceiver : BroadcastReceiver() {
                     Log.w("AnqiReceiver", "Ignoring duplicate delivery for ${alarm.id}")
                     return
                 }
-                val updated = advance(context, alarm, now, store)
-                RingtoneService.start(context, updated)
+                Diag.log(context, "FIRE 闹钟触发", "#${alarm.id}")
+                AlarmDelivery.fire(context, alarm, store)
             }
 
             AlarmScheduler.ACTION_TEST_FIRE -> {
                 // Same ring path as a real reminder, minus any state change: a
                 // test must not move the schedule, consume a repeat count or
                 // leave lastFiredAt behind.
+                Diag.log(context, "TEST 试响", "#${alarm.id}")
                 RingtoneService.start(context, alarm)
             }
 
             AlarmScheduler.ACTION_SNOOZE_FIRE -> {
+                Diag.log(context, "FIRE 贪睡触发", "#${alarm.id}")
                 RingtoneService.start(context, alarm)
             }
 
@@ -57,39 +69,15 @@ class AlarmReceiver : BroadcastReceiver() {
                 RingtoneService.stop(context)
                 AlarmNotifier.cancel(context, alarm.id)
                 AlarmScheduler(context).scheduleSnooze(alarm, store.snoozeMinutes)
+                Diag.log(context, "SNOOZE 贪睡 ${store.snoozeMinutes} 分钟", "#${alarm.id}")
             }
 
             AlarmScheduler.ACTION_DISMISS -> {
                 RingtoneService.stop(context)
                 AlarmNotifier.cancel(context, alarm.id)
                 AlarmScheduler(context).cancelSnooze(alarm.id)
+                Diag.log(context, "DISMISS 已关闭", "#${alarm.id}")
             }
         }
-    }
-
-    private fun advance(
-        context: Context,
-        alarm: Alarm,
-        now: Long,
-        store: AlarmStore
-    ): Alarm {
-        val scheduler = AlarmScheduler(context)
-        if (alarm.repeatType == RepeatType.ONCE) {
-            val updated = alarm.copy(enabled = false, lastFiredAt = now)
-            store.upsert(updated)
-            scheduler.cancel(updated.id)
-            return updated
-        }
-
-        val remaining = alarm.remainingCount?.let { (it - 1).coerceAtLeast(0) }
-        val enabled = remaining == null || remaining > 0
-        val updated = alarm.copy(
-            remainingCount = remaining,
-            enabled = enabled,
-            lastFiredAt = now
-        )
-        store.upsert(updated)
-        if (enabled) scheduler.schedule(updated) else scheduler.cancel(updated.id)
-        return updated
     }
 }

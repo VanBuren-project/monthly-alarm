@@ -30,6 +30,19 @@ object AlarmNotifier {
 
     /** Mirror of [CHANNEL_ID] for alarms whose 震动 switch is off. */
     private const val QUIET_CHANNEL_ID = "anqi_alarm_v2_quiet"
+
+    /**
+     * The last-resort channel, and the only one that carries a sound.
+     *
+     * It exists for exactly one situation: the ringing foreground service could
+     * not be started (Android 12+ background-start rules, an OEM blocking it, or
+     * no exact-alarm permission so no temporary allowlist was granted). In that
+     * case the notification *is* the alarm, and a silent alarm channel — which
+     * is what the normal path uses, because the service loops the tone itself —
+     * would mean the phone stays completely quiet. That is the "nothing rings at
+     * all" report, so this channel must not inherit that design.
+     */
+    private const val FALLBACK_CHANNEL_ID = "anqi_alarm_audible"
     private const val LEGACY_CHANNEL_ID = "anqi_alarm"
     const val NOTIFICATION_BASE = 7100
 
@@ -74,9 +87,40 @@ object AlarmNotifier {
                 }
             )
         }
+        if (manager.getNotificationChannel(FALLBACK_CHANNEL_ID) == null) {
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    FALLBACK_CHANNEL_ID,
+                    context.getString(R.string.channel_alarm_fallback_name),
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = context.getString(R.string.channel_alarm_fallback_desc)
+                    setSound(
+                        alarmSoundUri(),
+                        audioAttributes()
+                    )
+                    enableVibration(true)
+                    vibrationPattern = VIBRATION_PATTERN
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                    setShowBadge(false)
+                    // An alarm must be heard through Do Not Disturb, exactly like
+                    // the platform clock app.
+                    setBypassDnd(true)
+                }
+            )
+        }
     }
 
-    fun build(context: Context, alarm: Alarm, includeFullScreen: Boolean = true): Notification {
+    /**
+     * @param audible use the channel that plays a sound itself. Only for the
+     *   fallback path where no ringing service is running to loop the tone.
+     */
+    fun build(
+        context: Context,
+        alarm: Alarm,
+        includeFullScreen: Boolean = true,
+        audible: Boolean = false
+    ): Notification {
         ensureChannel(context)
         val notificationId = notificationId(alarm.id)
         val time = String.format(Locale.US, "%02d:%02d", alarm.hour, alarm.minute)
@@ -102,7 +146,11 @@ object AlarmNotifier {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val channel = if (alarm.vibrate) CHANNEL_ID else QUIET_CHANNEL_ID
+        val channel = when {
+            audible -> FALLBACK_CHANNEL_ID
+            alarm.vibrate -> CHANNEL_ID
+            else -> QUIET_CHANNEL_ID
+        }
         val builder = NotificationCompat.Builder(context, channel)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("$time  $label")
@@ -183,13 +231,18 @@ object AlarmNotifier {
     // The POST_NOTIFICATIONS guard is inlined instead of delegated to
     // canPostNotifications(): lint only trusts a checkSelfPermission call that is
     // visible in this method, and the annotation documents that trade-off.
+    /**
+     * Falls back to a *sounding* notification, because reaching this method means
+     * no service is looping the tone. A silent notification here is the
+     * "I got nothing at all" failure.
+     */
     @android.annotation.SuppressLint("MissingPermission")
-    fun notify(context: Context, alarm: Alarm) {
+    fun notify(context: Context, alarm: Alarm, audible: Boolean = true) {
         ensureChannel(context)
         if (!canPostNotifications(context)) return
         runCatching {
             NotificationManagerCompat.from(context)
-                .notify(notificationId(alarm.id), build(context, alarm))
+                .notify(notificationId(alarm.id), build(context, alarm, audible = audible))
         }
     }
 

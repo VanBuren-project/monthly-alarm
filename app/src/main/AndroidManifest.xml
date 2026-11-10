@@ -10,6 +10,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <application
@@ -64,5 +65,25 @@
             android:name=".alarm.RingtoneService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+
+        <!--
+            The guard: an ongoing, low-priority foreground service whose only job
+            is to keep the process (and therefore the AlarmManager registrations)
+            alive. `specialUse` is the honest type — it is not media, not sync,
+            not location. The subtype string is what Android 14+ shows the user.
+        -->
+        <service
+            android:name=".alarm.GuardService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="keep_scheduled_reminders_armed" />
+        </service>
+
+        <service
+            android:name=".alarm.GuardJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
     </application>
 </manifest>

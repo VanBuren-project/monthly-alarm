@@ -5,7 +5,12 @@
     <string name="channel_alarm_quiet_name">闹钟与提醒（不震动）</string>
     <string name="channel_alarm_desc">在设定时间响铃并显示全屏提醒</string>
     <string name="alarm_notification_title">月度闹钟提醒</string>
+    <string name="channel_alarm_fallback_name">闹钟（响铃兜底）</string>
+    <string name="channel_alarm_fallback_desc">响铃页面无法打开时，由这条通知直接发出闹钟声音</string>
     <string name="alarm_snooze">稍后提醒</string>
     <string name="alarm_dismiss">停止</string>
     <string name="alarm_default_label">提醒</string>
+    <string name="guard_title">提醒守护中</string>
+    <string name="guard_channel_name">提醒守护</string>
+    <string name="guard_channel_desc">常驻通知，让系统保留本应用，闹钟才不会被一起清掉</string>
 </resources>

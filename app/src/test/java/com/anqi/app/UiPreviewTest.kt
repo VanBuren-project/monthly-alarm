@@ -224,7 +224,33 @@ class UiPreviewTest {
         assertTrue(
             compose.onAllNodesWithText("别让系统把它清掉").fetchSemanticsNodes().isNotEmpty()
         )
+        // The 1.3.4 fix lives here: the guard is what keeps the process — and
+        // therefore the AlarmManager registrations — alive after the app is
+        // cleared from the background.
+        assertTrue(
+            compose.onAllNodesWithText("后台守护").fetchSemanticsNodes().isNotEmpty()
+        )
+        assertTrue(
+            compose.onAllNodesWithText("让提醒一直活着").fetchSemanticsNodes().isNotEmpty()
+        )
         capture("settings-360")
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h800dp-xhdpi")
+    fun phoneSettingsDiagnostics() {
+        showHome()
+        compose.onNodeWithText("设置").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("没有漏掉的提醒。").performScrollTo()
+        compose.waitForIdle()
+        assertTrue(
+            compose.onAllNodesWithText("没有漏掉的提醒。").fetchSemanticsNodes().isNotEmpty()
+        )
+        assertTrue(
+            compose.onAllNodesWithText("刷新").fetchSemanticsNodes().isNotEmpty()
+        )
+        capture("settings-diag-360")
     }
 
     @Test

@@ -13,6 +13,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.ViewModelProvider
 import com.anqi.app.alarm.AlarmScheduler
 import com.anqi.app.alarm.RingtoneService
+import com.anqi.app.alarm.SelfHeal
 import com.anqi.app.ui.AnqiRoot
 import com.anqi.app.ui.theme.AnqiTheme
 import com.anqi.app.viewmodel.AlarmViewModel
@@ -125,5 +126,11 @@ class MainActivity : ComponentActivity() {
         // (and simply backgrounded) when the full-screen intent gets blocked,
         // in which case onCreate never runs again.
         openRingingAlarmIfAny()
+        // Opening the app is the moment the user is looking for a missing
+        // reminder, so it is also the right moment to repair the schedule and to
+        // find out whether anything was silently skipped.
+        val late = SelfHeal.heal(this, ensureGuard = true)
+        if (late > 0) viewModel.refreshDiag()
+        viewModel.refreshReadiness()
     }
 }

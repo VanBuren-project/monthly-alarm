@@ -18,18 +18,25 @@ class AlarmScheduler(context: Context) {
     private val alarmManager = appContext.getSystemService(AlarmManager::class.java)
 
     fun scheduleAll(alarms: List<Alarm>) {
-        alarms.forEach(::schedule)
+        alarms.forEach { schedule(it) }
     }
 
-    fun schedule(alarm: Alarm) {
+    /**
+     * @param ensureGuard false when the caller *is* the guard service: starting
+     *   it again from inside its own `onStartCommand` would make it re-enter
+     *   itself forever.
+     */
+    fun schedule(alarm: Alarm, ensureGuard: Boolean = true) {
         val pending = alarmPendingIntent(alarm.id)
         if (!alarm.enabled) {
             alarmManager.cancel(pending)
+            ArmLedger.clearArmed(appContext, alarm.id)
             return
         }
 
         val next = NextOccurrence.next(alarm, ZonedDateTime.now()) ?: run {
             alarmManager.cancel(pending)
+            ArmLedger.clearArmed(appContext, alarm.id)
             return
         }
         val triggerAt = next.toInstant().toEpochMilli()
@@ -51,19 +58,41 @@ class AlarmScheduler(context: Context) {
         val exactAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
             alarmManager.canScheduleExactAlarms()
 
-        if (exactAllowed) {
-            alarmManager.setAlarmClock(
-                AlarmManager.AlarmClockInfo(triggerAt, showIntent),
-                pending
-            )
-        } else {
-            alarmManager.setWindow(
-                AlarmManager.RTC_WAKEUP,
-                triggerAt,
-                60_000L,
-                pending
-            )
+        val armed = runCatching {
+            if (exactAllowed) {
+                alarmManager.setAlarmClock(
+                    AlarmManager.AlarmClockInfo(triggerAt, showIntent),
+                    pending
+                )
+            } else {
+                alarmManager.setWindow(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAt,
+                    60_000L,
+                    pending
+                )
+            }
         }
+
+        armed.onSuccess {
+            // The ledger is what lets the app notice afterwards that the system
+            // did not keep this promise. Writing it only after the call returns
+            // keeps a failed registration from looking like a missed alarm.
+            ArmLedger.recordArmed(appContext, alarm.id, triggerAt)
+            Diag.log(
+                appContext,
+                "ARM",
+                "#${alarm.id} ${Diag.time(triggerAt)}${if (exactAllowed) "" else "（窗口）"}"
+            )
+        }.onFailure { t ->
+            Log.e("AnqiScheduler", "Unable to arm alarm ${alarm.id}", t)
+            Diag.log(appContext, "ARM 失败", "#${alarm.id} ${t.javaClass.simpleName}")
+        }
+
+        // A live foreground guard is what actually keeps the registration alive
+        // on ROMs that clear the background; make sure it is up whenever a
+        // reminder is armed.
+        if (ensureGuard) GuardService.start(appContext)
     }
 
     fun scheduleSnooze(alarm: Alarm, minutes: Int) {
@@ -104,10 +133,10 @@ class AlarmScheduler(context: Context) {
      * enabled, so re-arming the base alarm is harmless, while cancelling it
      * would eat the snooze the user is waiting for.
      */
-    fun rescheduleAll(alarms: List<Alarm>) {
+    fun rescheduleAll(alarms: List<Alarm>, ensureGuard: Boolean = true) {
         alarms.forEach { alarm ->
             alarmManager.cancel(alarmPendingIntent(alarm.id))
-            if (alarm.enabled) schedule(alarm)
+            if (alarm.enabled) schedule(alarm, ensureGuard) else ArmLedger.clearArmed(appContext, alarm.id)
         }
     }
 

@@ -15,11 +15,17 @@ class BootReceiver : BroadcastReceiver() {
         ) {
             return
         }
-        val store = AlarmStore(context)
         AlarmNotifier.ensureChannel(context)
-        val scheduler = AlarmScheduler(context)
-        scheduler.rescheduleAll(store.all())
-        // A reboot clears every repeating registration, heartbeat included.
-        scheduler.scheduleHeartbeat()
+        // A reboot clears every registration, so nothing can be "late by the
+        // clock" here in a way that is safe to replay: SelfHeal still audits the
+        // ledger, but the recovery window is what keeps a week-old slot from
+        // suddenly ringing at boot.
+        val late = SelfHeal.heal(context, ensureGuard = true)
+        Diag.log(
+            context,
+            "BOOT 重排",
+            "$action · ${AlarmStore(context).all().size} 个提醒" +
+                if (late > 0) "，补响 $late 个" else ""
+        )
     }
 }
