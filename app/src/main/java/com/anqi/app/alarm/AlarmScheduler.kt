@@ -30,12 +30,14 @@ class AlarmScheduler(context: Context) {
         val pending = alarmPendingIntent(alarm.id)
         if (!alarm.enabled) {
             alarmManager.cancel(pending)
+            alarmManager.cancel(servicePendingIntent(alarm.id))
             ArmLedger.clearArmed(appContext, alarm.id)
             return
         }
 
         val next = NextOccurrence.next(alarm, ZonedDateTime.now()) ?: run {
             alarmManager.cancel(pending)
+            alarmManager.cancel(servicePendingIntent(alarm.id))
             ArmLedger.clearArmed(appContext, alarm.id)
             return
         }
@@ -60,9 +62,30 @@ class AlarmScheduler(context: Context) {
 
         val armed = runCatching {
             if (exactAllowed) {
+                // Two registrations for the same moment, on two different
+                // PendingIntents, deliberately using two different AlarmManager
+                // APIs.
+                //
+                // `setAlarmClock` is the one that draws the status-bar chip and
+                // the one the platform protects hardest — but it is also a plain
+                // broadcast, and a broadcast to an app that a ROM has frozen or
+                // cleaned simply never arrives. That is the "absolutely nothing
+                // happens" report.
+                //
+                // `setExactAndAllowWhileIdle` with a *service* PendingIntent is
+                // what the stock clock does: the system starts the ringing
+                // service itself, so delivery does not go through our receiver or
+                // our process bookkeeping at all. Whichever of the two survives
+                // rings; the duplicate guard in AlarmReceiver and in
+                // AlarmDelivery collapses the case where both do.
                 alarmManager.setAlarmClock(
                     AlarmManager.AlarmClockInfo(triggerAt, showIntent),
                     pending
+                )
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAt,
+                    servicePendingIntent(alarm.id)
                 )
             } else {
                 alarmManager.setWindow(
@@ -70,6 +93,11 @@ class AlarmScheduler(context: Context) {
                     triggerAt,
                     60_000L,
                     pending
+                )
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAt,
+                    servicePendingIntent(alarm.id)
                 )
             }
         }
@@ -109,6 +137,7 @@ class AlarmScheduler(context: Context) {
 
     fun cancel(id: Long) {
         alarmManager.cancel(alarmPendingIntent(id))
+        alarmManager.cancel(servicePendingIntent(id))
         alarmManager.cancel(snoozePendingIntent(id))
     }
 
@@ -136,6 +165,7 @@ class AlarmScheduler(context: Context) {
     fun rescheduleAll(alarms: List<Alarm>, ensureGuard: Boolean = true) {
         alarms.forEach { alarm ->
             alarmManager.cancel(alarmPendingIntent(alarm.id))
+            alarmManager.cancel(servicePendingIntent(alarm.id))
             if (alarm.enabled) schedule(alarm, ensureGuard) else ArmLedger.clearArmed(appContext, alarm.id)
         }
     }
@@ -234,6 +264,25 @@ class AlarmScheduler(context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+    /**
+     * The registration the stock clock uses: the system starts the ringing
+     * service itself, so delivery never depends on our receiver being reachable
+     * after the app has sat idle for weeks.
+     *
+     * `getForegroundService` (not `getService`) because the service calls
+     * `startForeground` immediately; the exact-alarm exemption is what makes that
+     * legal from the background.
+     */
+    private fun servicePendingIntent(id: Long): PendingIntent =
+        PendingIntent.getForegroundService(
+            appContext,
+            requestCode(id, ROLE_SERVICE),
+            Intent(appContext, RingtoneService::class.java)
+                .setAction(ACTION_SCHEDULED_FIRE)
+                .putExtra(EXTRA_ID, id),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
     private fun requestCode(id: Long, role: Int): Int {
         val mixed = (id xor (id ushr 32)).toInt()
         return mixed * 7 + role
@@ -246,12 +295,19 @@ class AlarmScheduler(context: Context) {
         const val ACTION_DISMISS = "com.anqi.app.action.DISMISS"
         const val ACTION_HEARTBEAT = "com.anqi.app.action.HEARTBEAT"
         const val ACTION_TEST_FIRE = "com.anqi.app.action.TEST_FIRE"
+
+        /**
+         * Start of [RingtoneService] by the system's own alarm delivery — the
+         * stock-clock path, where no broadcast of ours is involved.
+         */
+        const val ACTION_SCHEDULED_FIRE = "com.anqi.app.action.SCHEDULED_FIRE"
         const val EXTRA_ID = "alarm_id"
 
         private const val ROLE_ALARM = 1
         private const val ROLE_SNOOZE = 2
         private const val ROLE_SHOW = 3
         private const val ROLE_TEST = 4
+        private const val ROLE_SERVICE = 6
         private const val HEARTBEAT_REQUEST_CODE = 907_113
         private const val HEARTBEAT_INTERVAL_MS = 6 * 60 * 60 * 1000L
         private const val HEARTBEAT_SLACK_MS = 10 * 60 * 1000L

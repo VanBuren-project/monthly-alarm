@@ -46,6 +46,10 @@ object AlarmNotifier {
     private const val LEGACY_CHANNEL_ID = "anqi_alarm"
     const val NOTIFICATION_BASE = 7100
 
+    /** Action + request-code offset that keep the full-screen intent its own PendingIntent. */
+    private const val ACTION_FULLSCREEN = "com.anqi.app.action.FULLSCREEN_RING"
+    private const val FULLSCREEN_REQUEST_OFFSET = 1_000_003
+
     private val VIBRATION_PATTERN = longArrayOf(0L, 800L, 600L, 800L, 600L)
 
     fun ensureChannel(context: Context) {
@@ -180,7 +184,14 @@ object AlarmNotifier {
             .setVibrate(null)
 
         if (includeFullScreen) {
-            builder.setFullScreenIntent(contentIntent, true)
+            // A *separate* PendingIntent from the content one, with its own action
+            // string. Reusing the content intent's identity means the system has
+            // one PendingIntent playing two roles: it dedupes the two launches,
+            // and on several ROMs the full-screen launch ends up treated as the
+            // ordinary content launch (no keyguard bypass, no screen wake) — the
+            // "it rings but the lockscreen shows nothing to press" report. The
+            // stock clock keeps them apart the same way.
+            builder.setFullScreenIntent(fullScreenIntent(context, notificationId, alarm.id), true)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             builder.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
@@ -203,10 +214,32 @@ object AlarmNotifier {
         )
 
     /**
+     * The "wake the phone and take over the screen" intent, kept distinct from
+     * [ringIntent] on purpose: different action, different request code. That is
+     * how the AOSP clock does it, and it is what keeps the system from collapsing
+     * the two into one launch.
+     */
+    private fun fullScreenIntent(context: Context, requestCode: Int, alarmId: Long): PendingIntent =
+        PendingIntent.getActivity(
+            context,
+            requestCode + FULLSCREEN_REQUEST_OFFSET,
+            Intent(context, AlarmActivity::class.java)
+                .setAction(ACTION_FULLSCREEN)
+                .putExtra(AlarmScheduler.EXTRA_ID, alarmId)
+                .addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_NO_USER_ACTION or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP
+                ),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+    /**
      * Full-screen notifications are the sanctioned path, but they are also the
      * first thing OEM ROMs disable. Starting the activity from the ringing
      * foreground service is the fallback; when the ROM blocks it, the exception is
-     * logged instead of silently swallowed so a bug report can tell the two apart.
+     * logged to 运行记录 as well as logcat, because that on-device log is the only
+     * evidence available when the user reports "sound but no screen".
      */
     fun launch(context: Context, alarm: Alarm) {
         val intent = Intent(context, AlarmActivity::class.java)
@@ -224,6 +257,12 @@ object AlarmNotifier {
                     "startActivity blocked (fullScreen=${canUseFullScreenIntent(context)}, " +
                         "overlay=${canDrawOverlays(context)})",
                     error
+                )
+                Diag.log(
+                    context,
+                    "RING 响铃页被系统拒绝",
+                    "全屏意图=${canUseFullScreenIntent(context).let { if (it) "已授权" else "未授权" }}" +
+                        "，悬浮窗=${canDrawOverlays(context).let { if (it) "已授权" else "未授权" }}"
                 )
             }
     }

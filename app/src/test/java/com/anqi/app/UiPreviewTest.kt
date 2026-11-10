@@ -224,14 +224,14 @@ class UiPreviewTest {
         assertTrue(
             compose.onAllNodesWithText("别让系统把它清掉").fetchSemanticsNodes().isNotEmpty()
         )
-        // The 1.3.4 fix lives here: the guard is what keeps the process — and
-        // therefore the AlarmManager registrations — alive after the app is
-        // cleared from the background.
+        // 1.3.5 made delivery independent of a resident process (the exact alarm
+        // starts the ringing service itself, like the stock clock), so the guard
+        // is now presented as an optional extra layer rather than a requirement.
         assertTrue(
             compose.onAllNodesWithText("后台守护").fetchSemanticsNodes().isNotEmpty()
         )
         assertTrue(
-            compose.onAllNodesWithText("让提醒一直活着").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithText("多一层保险").fetchSemanticsNodes().isNotEmpty()
         )
         capture("settings-360")
     }

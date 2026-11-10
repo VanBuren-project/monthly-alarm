@@ -90,7 +90,10 @@ fun AlarmEditorScreen(
     var showRepeatSheet by remember { mutableStateOf(false) }
     var showDelete by remember { mutableStateOf(false) }
     var validationError by remember { mutableStateOf<String?>(null) }
-    val previews = NextOccurrence.nextN(draft, count = 3)
+    // The preview shows what *would* happen, so a paused reminder is evaluated
+    // as if it were switched on — otherwise editing it displays "no next
+    // occurrence", which reads like the rule itself is broken.
+    val previews = NextOccurrence.nextN(draft.copy(enabled = true), count = 3)
 
     Column(
         Modifier
@@ -116,16 +119,9 @@ fun AlarmEditorScreen(
             AnqiTextButton(
                 "保存",
                 onClick = {
-                    val candidate = normalize(draft)
-                    validationError = when {
-                        candidate.repeatType == RepeatType.YEARLY &&
-                            !isValidYearly(candidate.yearlyMonth, candidate.yearlyDay) ->
-                            "这个日期不存在，请先调整月份或日期。"
-                        NextOccurrence.next(candidate) == null ->
-                            "这个时间已经过去，或结束条件已用完。请调整日期或时间。"
-                        else -> null
-                    }
-                    if (validationError == null) onSave(candidate)
+                    val check = checkBeforeSave(draft)
+                    validationError = check.error
+                    if (check.error == null) onSave(check.alarm)
                 },
                 color = Anqi.palette.signal
             )
@@ -806,6 +802,32 @@ private fun Alarm.withType(type: RepeatType): Alarm {
         RepeatType.YEARLY -> base.copy(yearlyMonth = today.monthValue, yearlyDay = today.dayOfMonth)
     }
 }
+
+/**
+ * Validates a draft and returns the alarm to persist.
+ *
+ * Saving also switches the reminder on. A paused reminder whose time is being
+ * changed is meant to ring at that new time — that is the whole point of editing
+ * it. Validating the draft as-is is a guaranteed failure instead, because
+ * `NextOccurrence.next()` returns null for a disabled alarm, so a perfectly
+ * valid future time would be rejected with "这个时间已经过去". That mismatch
+ * between the preview (evaluated as enabled) and the validation (evaluated as
+ * disabled) was the whole bug.
+ */
+internal fun checkBeforeSave(draft: Alarm): SaveCheck {
+    val candidate = normalize(draft).copy(enabled = true)
+    val error = when {
+        candidate.repeatType == RepeatType.YEARLY &&
+            !isValidYearly(candidate.yearlyMonth, candidate.yearlyDay) ->
+            "这个日期不存在，请先调整月份或日期。"
+        NextOccurrence.next(candidate) == null ->
+            "这个时间已经过去，或结束条件已用完。请调整日期或时间。"
+        else -> null
+    }
+    return SaveCheck(candidate, error)
+}
+
+internal data class SaveCheck(val alarm: Alarm, val error: String?)
 
 fun normalize(alarm: Alarm): Alarm {
     val today = LocalDate.now()

@@ -184,14 +184,14 @@ fun SettingsScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    "让提醒一直活着",
+                                    "多一层保险",
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = Anqi.palette.ink
                                 )
                                 Text(
-                                    if (viewModel.guardEnabled) "已开启 · 状态栏有常驻通知" else "已关闭",
+                                    if (viewModel.guardEnabled) "已开启 · 状态栏有一个常驻通知" else "已关闭",
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = if (viewModel.guardEnabled) Anqi.palette.muted else Anqi.palette.signal
+                                    color = Anqi.palette.muted
                                 )
                             }
                             Switch(
@@ -208,16 +208,16 @@ fun SettingsScreen(
                         }
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            "开启后应用会保留一个低优先级常驻通知。这是系统允许应用长期驻留的唯一方式——清后台之所以会连闹钟一起清掉，就是因为进程没了，闹钟登记也一起没了。",
+                            "提醒本身已经不依赖应用留在后台了：到点那一刻由系统直接把响铃服务拉起来，跟手机自带闹钟一样。这一个开关只是再叠一层——让进程尽量别被杀，省掉每次重建的开销。",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Anqi.palette.muted
                         )
                         if (!viewModel.guardEnabled) {
                             Spacer(Modifier.height(6.dp))
                             Text(
-                                "关闭后如果系统清理了后台，提醒可能不再响，直到你再次打开本应用。",
+                                "关掉也不影响到点响铃，只是应用被清理后要重新启动一次才恢复。",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = Anqi.palette.signal
+                                color = Anqi.palette.muted
                             )
                         }
                     }
@@ -237,7 +237,7 @@ fun SettingsScreen(
                         )
                         Spacer(Modifier.height(5.dp))
                         Text(
-                            "还要三件事配合：加省电白名单、允许自启动、在最近任务里长按本应用卡片锁定它。",
+                            "如果遇到过被系统清理，再补这三件事：加省电白名单、允许自启动、在最近任务里长按本应用卡片锁定它。",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Anqi.palette.muted
                         )

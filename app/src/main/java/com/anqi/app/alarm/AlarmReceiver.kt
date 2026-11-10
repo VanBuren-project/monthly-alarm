@@ -40,11 +40,15 @@ class AlarmReceiver : BroadcastReceiver() {
         val alarm = store.find(id) ?: return
 
         when (intent.action) {
+            // The same moment is armed twice (see AlarmScheduler): this broadcast,
+            // and a service PendingIntent the system starts on its own. Whichever
+            // arrives second is folded into the first by the lastFiredAt guard
+            // instead of ringing twice or advancing the schedule twice.
             AlarmScheduler.ACTION_ALARM -> {
                 if (!alarm.enabled) return
                 val now = System.currentTimeMillis()
                 val last = alarm.lastFiredAt
-                if (last != null && now - last < 30_000L) {
+                if (last != null && now - last < AlarmDelivery.SLOT_DEDUPE_MS) {
                     Log.w("AnqiReceiver", "Ignoring duplicate delivery for ${alarm.id}")
                     return
                 }

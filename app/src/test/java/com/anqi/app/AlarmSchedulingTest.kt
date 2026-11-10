@@ -163,6 +163,77 @@ class AlarmSchedulingTest {
         assertEquals(1, snoozes())
     }
 
+    /**
+     * The 1.3.5 delivery model: one reminder is armed twice for the same moment.
+     * `setAlarmClock` keeps the status-bar chip and is the registration the
+     * platform protects hardest, but it is a broadcast to our receiver — which a
+     * ROM that froze or cleaned the app may never deliver. The second
+     * registration hands the system a service PendingIntent, so the system
+     * starts the ringing service itself, exactly like the stock clock. Losing
+     * either one silently restores the "absolutely nothing happens" report.
+     */
+    @Test
+    fun everyAlarmIsArmedAsBothABroadcastAndAServiceStart() {
+        val alarm = monthly()
+        store.saveAll(listOf(alarm))
+
+        scheduler.schedule(alarm)
+
+        assertEquals(1, armedAlarms())
+        assertEquals(1, countOf(AlarmScheduler.ACTION_SCHEDULED_FIRE))
+        // And they really point at the same trigger time, otherwise the two
+        // layers ring at different minutes.
+        val times = shadowOf(alarmManager).scheduledAlarms
+            .filter { it.operation?.action() in setOf(AlarmScheduler.ACTION_ALARM, AlarmScheduler.ACTION_SCHEDULED_FIRE) }
+            .map { @Suppress("DEPRECATION") it.triggerAtTime }
+            .toSet()
+        assertEquals(1, times.size)
+    }
+
+    @Test
+    fun theServiceRegistrationIsAForegroundServiceStart() {
+        val alarm = monthly()
+        store.saveAll(listOf(alarm))
+
+        scheduler.schedule(alarm)
+
+        val service = shadowOf(alarmManager).scheduledAlarms
+            .single { it.operation?.action() == AlarmScheduler.ACTION_SCHEDULED_FIRE }
+        // getForegroundService(), not getService(): the service calls
+        // startForeground immediately, and being started by an exact alarm is
+        // what makes that legal from the background.
+        assertTrue(
+            "service registration was not a foreground-service start",
+            shadowOf(service.operation!!).isForegroundService
+        )
+    }
+
+    @Test
+    fun cancellingRemovesBothRegistrations() {
+        val alarm = monthly()
+        store.saveAll(listOf(alarm))
+        scheduler.schedule(alarm)
+        assertEquals(2, totalCount())
+
+        scheduler.cancel(alarm.id)
+
+        assertEquals(0, armedAlarms())
+        assertEquals(0, countOf(AlarmScheduler.ACTION_SCHEDULED_FIRE))
+    }
+
+    @Test
+    fun disablingAnAlarmDropsBothRegistrations() {
+        val alarm = monthly()
+        store.saveAll(listOf(alarm))
+        scheduler.schedule(alarm)
+        assertEquals(2, totalCount())
+
+        scheduler.schedule(alarm.copy(enabled = false))
+
+        assertEquals(0, armedAlarms())
+        assertEquals(0, countOf(AlarmScheduler.ACTION_SCHEDULED_FIRE))
+    }
+
     @Test
     fun testRingDoesNotDisturbTheRealSchedule() {
         val alarm = monthly()

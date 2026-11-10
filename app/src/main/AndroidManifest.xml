@@ -12,6 +12,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
 
     <application
         android:name=".AnqiApp"
@@ -33,12 +34,19 @@
             </intent-filter>
         </activity>
 
+        <!--
+            showWhenLocked / turnScreenOn are the API 27+ switches; showOnLockScreen
+            is the older OEM key (MIUI, EMUI) that some ROMs still read, and it is
+            what the stock clock declares. Without them the screen lights up while
+            the ring page stays behind the keyguard — sound but no buttons.
+        -->
         <activity
             android:name=".AlarmActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
             android:excludeFromRecents="true"
             android:exported="false"
             android:launchMode="singleTask"
+            android:showOnLockScreen="true"
             android:showWhenLocked="true"
             android:taskAffinity="com.anqi.app.alarm"
             android:theme="@style/Theme.Anqi.Alarm"
@@ -58,6 +66,9 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <action android:name="android.intent.action.TIME_SET" />
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <!-- Revoking SCHEDULE_EXACT_ALARM stops the app and cancels every
+                     exact alarm; this broadcast is the only way back. -->
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
         </receiver>
 

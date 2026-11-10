@@ -16,6 +16,21 @@ import com.anqi.app.model.RepeatType
  */
 object AlarmDelivery {
 
+    /**
+     * How long one slot counts as "already delivered".
+     *
+     * Every reminder is armed twice for the same moment (an exact broadcast
+     * behind the status-bar clock, plus a service start the system delivers on
+     * its own), so both can arrive for one slot. The first advances the
+     * schedule and rings; the other must be recognised as the same slot instead
+     * of ringing again or — worse — advancing a second time and silently
+     * skipping a month.
+     *
+     * Generous on purpose: a Doze delivery can be a minute late, and a double
+     * ring is a much smaller annoyance than a skipped month.
+     */
+    const val SLOT_DEDUPE_MS = 90_000L
+
     /** Advances the schedule, persists it, and starts the ring. Returns the updated alarm. */
     fun fire(context: Context, alarm: Alarm, store: AlarmStore = AlarmStore(context)): Alarm {
         val now = System.currentTimeMillis()
@@ -23,6 +38,34 @@ object AlarmDelivery {
         ArmLedger.clearArmed(context, updated.id)
         GuardService.start(context)
         RingtoneService.start(context, updated)
+        return updated
+    }
+
+    /**
+     * The delivery path where the system starts [RingtoneService] itself from an
+     * exact alarm, with no broadcast of ours in between.
+     *
+     * @return the alarm to ring, or null when this slot has no business ringing
+     *   (unknown id, or a reminder that is off long before now).
+     */
+    fun advanceForSystemDelivery(
+        context: Context,
+        alarmId: Long,
+        store: AlarmStore = AlarmStore(context)
+    ): Alarm? {
+        val alarm = store.find(alarmId) ?: return null
+        val now = System.currentTimeMillis()
+        val last = alarm.lastFiredAt
+        if (last != null && now - last < SLOT_DEDUPE_MS) {
+            // The broadcast path already handled this slot: ring, but do not
+            // advance again, and above all do not stop the ringing service.
+            Diag.log(context, "RING 重复投递已合并", "#${alarm.id}")
+            return alarm
+        }
+        if (!alarm.enabled) return null
+        val updated = advance(context, alarm, now, store)
+        ArmLedger.clearArmed(context, updated.id)
+        GuardService.start(context)
         return updated
     }
 

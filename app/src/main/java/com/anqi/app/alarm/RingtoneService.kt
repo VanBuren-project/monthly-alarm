@@ -48,6 +48,10 @@ class RingtoneService : Service() {
         }
 
         val requestedId = intent?.getLongExtra(AlarmScheduler.EXTRA_ID, -1L) ?: -1L
+        // Started by the system's own exact alarm (a service PendingIntent) rather
+        // than by our receiver. That means no broadcast ran, so the schedule has
+        // not been advanced yet and doing it here is this path's job.
+        val fromSystemAlarm = intent?.action == AlarmScheduler.ACTION_SCHEDULED_FIRE
         // A null intent means the system restarted us after reclaiming the
         // process, which is exactly the case where the alarm was still ringing
         // and the user never dismissed it. The age check matters just as much:
@@ -59,11 +63,18 @@ class RingtoneService : Service() {
             RingResume.resumable(this) -> RingResume.marked(this)
             else -> -1L
         }
-        val alarm = if (alarmId >= 0L) AlarmStore(this).find(alarmId) else null
+        val alarm = when {
+            alarmId < 0L -> null
+            fromSystemAlarm -> AlarmDelivery.advanceForSystemDelivery(this, alarmId)
+            else -> AlarmStore(this).find(alarmId)
+        }
         if (alarm == null) {
             RingResume.clear(this)
             stopSelf()
             return START_NOT_STICKY
+        }
+        if (fromSystemAlarm) {
+            Diag.log(this, "RING 系统直接唤起服务", "#${alarm.id}")
         }
         if (resuming) {
             Diag.log(this, "RING 响铃被打断后自动恢复", "#${alarm.id} · ${RingResume.age(this) / 1000} 秒")
