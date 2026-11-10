@@ -159,6 +159,10 @@ object SelfHeal {
     fun heal(context: Context, ensureGuard: Boolean = false): Int {
         val store = AlarmStore(context)
         val scheduler = AlarmScheduler(context)
+        // A swipe test that never rang is judged here, before anything is
+        // re-armed: while the app was swiped away nothing of ours could run, so
+        // this is the first moment the silence can be turned into a verdict.
+        runCatching { SwipeTest.settle(context) }
         val late = runCatching { CatchUp.run(context) }.getOrDefault(0)
         runCatching { RingResume.clearStale(context) }
         runCatching { scheduler.rescheduleAll(store.all(), ensureGuard = ensureGuard) }

@@ -73,6 +73,15 @@ class RingtoneService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        // Reaching this point is proof the ring happened, whichever way it got
+        // here. Recording it is what turns the swipe test from "we think it
+        // works" into a measured verdict.
+        //
+        // Only a ring that *carries the test extra* counts. Both halves of the
+        // swipe test stamp it; a real reminder and the 10-second test ring do
+        // not, so neither can be mistaken for a measurement even if it happens to
+        // fire inside the test's window.
+        intent?.getStringExtra(EXTRA_TEST_PATH)?.let { SwipeTest.noteDelivery(this, it) }
         if (fromSystemAlarm) {
             Diag.log(this, "RING 系统直接唤起服务", "#${alarm.id}")
         }
@@ -290,6 +299,9 @@ class RingtoneService : Service() {
         private const val SCREEN_WAKE_MS = 30_000L
         const val ACTION_STOP = "com.anqi.app.action.STOP_RINGING"
 
+        /** Present only on the service half of the swipe test; see [SwipeTest]. */
+        const val EXTRA_TEST_PATH = "test_path"
+
         /**
          * Id of the alarm currently ringing, or -1. The ring screen is normally
          * opened by the full-screen intent, but when the ROM blocks that the
@@ -315,13 +327,30 @@ class RingtoneService : Service() {
             return activeRingToken
         }
 
-        fun start(context: Context, alarm: Alarm) {
-            // Written before the start attempt, so a ring that is cut short by a
-            // kill still leaves a trace the restart path can pick up.
-            RingResume.mark(context, alarm.id)
+        /**
+         * @param resumable false for a test ring. The resume mark exists so a ring
+         *   that is killed mid-tone can come back; a test ring has no such duty,
+         *   and leaving a mark behind would let a swiped test ring itself again
+         *   minutes later — which the user would read as a ghost reminder.
+         * @param path the swipe test's record of which registration rang, or null
+         *   for an ordinary ring. Passed explicitly because a broadcast-delivered
+         *   swipe test is otherwise indistinguishable from the 10-second test ring.
+         */
+        fun start(
+            context: Context,
+            alarm: Alarm,
+            resumable: Boolean = true,
+            path: String? = null
+        ) {
+            if (resumable) {
+                // Written before the start attempt, so a ring that is cut short by
+                // a kill still leaves a trace the restart path can pick up.
+                RingResume.mark(context, alarm.id)
+            }
             Diag.log(context, "RING 开始响铃", "#${alarm.id}")
             val intent = Intent(context, RingtoneService::class.java)
                 .putExtra(AlarmScheduler.EXTRA_ID, alarm.id)
+            path?.let { intent.putExtra(EXTRA_TEST_PATH, it) }
             try {
                 ContextCompat.startForegroundService(context, intent)
             } catch (t: Throwable) {

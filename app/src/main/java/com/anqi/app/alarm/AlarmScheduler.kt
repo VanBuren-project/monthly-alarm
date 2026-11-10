@@ -48,14 +48,7 @@ class AlarmScheduler(context: Context) {
         // screen made a future alarm look like it was ringing right now.
         // "Unlock and land on the ringing page" is handled by MainActivity
         // instead, which only routes when a ring is actually in progress.
-        val showIntent = PendingIntent.getActivity(
-            appContext,
-            requestCode(alarm.id, ROLE_SHOW),
-            Intent(appContext, MainActivity::class.java)
-                .putExtra(EXTRA_ID, alarm.id)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val showIntent = showIntent(alarm.id)
 
         val exactAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
             alarmManager.canScheduleExactAlarms()
@@ -226,6 +219,61 @@ class AlarmScheduler(context: Context) {
         alarmManager.cancel(testPendingIntent(id))
     }
 
+    /**
+     * Arms the same *pair* of registrations a real reminder uses, for a moment
+     * about a minute away, so the user can swipe the app out of the recents list
+     * and see whether this phone still delivers.
+     *
+     * Faithful on purpose. A test that used only one of the two paths would
+     * answer a question nobody asked: the interesting failure is a ROM that
+     * freezes the app so completely that *neither* the broadcast *nor* the
+     * system-started service arrives, and only reusing both can surface it.
+     *
+     * Neither registration touches the reminder's schedule: the broadcast goes to
+     * [AlarmReceiver] under a dedicated action and the service one carries
+     * [ACTION_TEST_FIRE] rather than [ACTION_SCHEDULED_FIRE], which is what makes
+     * [RingtoneService] ring without advancing anything.
+     */
+    fun scheduleSwipeTest(alarm: Alarm, triggerAt: Long) {
+        val exactAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+            alarmManager.canScheduleExactAlarms()
+        val broadcast = swipePendingIntent(alarm.id)
+        val service = testServicePendingIntent(alarm.id)
+        runCatching {
+            if (exactAllowed) {
+                alarmManager.setAlarmClock(
+                    AlarmManager.AlarmClockInfo(triggerAt, showIntent(alarm.id)),
+                    broadcast
+                )
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAt,
+                    service
+                )
+            } else {
+                alarmManager.setWindow(AlarmManager.RTC_WAKEUP, triggerAt, 60_000L, broadcast)
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, service)
+            }
+        }.onFailure { t ->
+            Log.e("AnqiScheduler", "Unable to arm the swipe test for ${alarm.id}", t)
+            Diag.log(appContext, "SWIPE 排期失败", t.javaClass.simpleName)
+        }
+    }
+
+    fun cancelSwipeTest() {
+        // Only one test is ever armed, and its alarm id is remembered by
+        // [SwipeTest]; PendingIntent matching needs that id because the request
+        // code is derived from it.
+        val id = SwipeTest.pendingAlarmId(appContext) ?: return
+        alarmManager.cancel(swipePendingIntent(id))
+        alarmManager.cancel(testServicePendingIntent(id))
+    }
+
+    /**
+     * The broadcast half of the 10-second test ring in settings.
+     *
+     * Deliberately distinct from [swipePendingIntent] — see [ROLE_SWIPE].
+     */
     private fun testPendingIntent(id: Long): PendingIntent =
         PendingIntent.getBroadcast(
             appContext,
@@ -233,6 +281,50 @@ class AlarmScheduler(context: Context) {
             Intent(appContext, AlarmReceiver::class.java)
                 .setAction(ACTION_TEST_FIRE)
                 .putExtra(EXTRA_ID, id),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+    /**
+     * The broadcast half of the swipe test: the same shape a real reminder uses,
+     * under a request code of its own.
+     *
+     * The extra is what tells [SwipeTest] this ring was the measurement; without
+     * it a broadcast-delivered test would be indistinguishable from the 10-second
+     * test ring and the pass could never be recorded.
+     */
+    private fun swipePendingIntent(id: Long): PendingIntent =
+        PendingIntent.getBroadcast(
+            appContext,
+            requestCode(id, ROLE_SWIPE),
+            Intent(appContext, AlarmReceiver::class.java)
+                .setAction(ACTION_TEST_FIRE)
+                .putExtra(EXTRA_ID, id)
+                .putExtra(RingtoneService.EXTRA_TEST_PATH, PATH_BROADCAST),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+    /**
+     * The system-starts-the-service half of the test, carrying [ACTION_TEST_FIRE]
+     * so [RingtoneService] rings without advancing the schedule.
+     */
+    private fun testServicePendingIntent(id: Long): PendingIntent =
+        PendingIntent.getForegroundService(
+            appContext,
+            requestCode(id, ROLE_TEST_SERVICE),
+            Intent(appContext, RingtoneService::class.java)
+                .setAction(ACTION_TEST_FIRE)
+                .putExtra(EXTRA_ID, id)
+                .putExtra(RingtoneService.EXTRA_TEST_PATH, PATH_SERVICE),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+    private fun showIntent(id: Long): PendingIntent =
+        PendingIntent.getActivity(
+            appContext,
+            requestCode(id, ROLE_SHOW),
+            Intent(appContext, MainActivity::class.java)
+                .putExtra(EXTRA_ID, id)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -303,11 +395,25 @@ class AlarmScheduler(context: Context) {
         const val ACTION_SCHEDULED_FIRE = "com.anqi.app.action.SCHEDULED_FIRE"
         const val EXTRA_ID = "alarm_id"
 
+        /** Which of the two registrations actually rang, recorded by the swipe test. */
+        const val PATH_SERVICE = "service"
+        const val PATH_BROADCAST = "broadcast"
+
         private const val ROLE_ALARM = 1
         private const val ROLE_SNOOZE = 2
         private const val ROLE_SHOW = 3
         private const val ROLE_TEST = 4
         private const val ROLE_SERVICE = 6
+        private const val ROLE_TEST_SERVICE = 7
+
+        /**
+         * The swipe test's broadcast half, distinct from [ROLE_TEST] on purpose.
+         * PendingIntent identity ignores extras but not the request code, so
+         * sharing one would make the 10-second test ring and the swipe test
+         * overwrite each other — and make `cancelTestRing` silently disarm a
+         * swipe test that is about to fire.
+         */
+        private const val ROLE_SWIPE = 8
         private const val HEARTBEAT_REQUEST_CODE = 907_113
         private const val HEARTBEAT_INTERVAL_MS = 6 * 60 * 60 * 1000L
         private const val HEARTBEAT_SLACK_MS = 10 * 60 * 1000L

@@ -59,9 +59,20 @@ class AlarmReceiver : BroadcastReceiver() {
             AlarmScheduler.ACTION_TEST_FIRE -> {
                 // Same ring path as a real reminder, minus any state change: a
                 // test must not move the schedule, consume a repeat count or
-                // leave lastFiredAt behind.
-                Diag.log(context, "TEST 试响", "#${alarm.id}")
-                RingtoneService.start(context, alarm)
+                // leave lastFiredAt behind. Also not resumable — a test ring has
+                // no duty to survive a kill, and leaving the resume mark would
+                // let a swiped test ring itself again minutes later.
+                //
+                // The path extra is present only when this broadcast is the
+                // swipe test's own half; the 10-second test ring carries none and
+                // must not be measured as if it had survived a swipe.
+                val testPath = intent.getStringExtra(RingtoneService.EXTRA_TEST_PATH)
+                Diag.log(
+                    context,
+                    if (testPath != null) "TEST 实测响铃" else "TEST 试响",
+                    "#${alarm.id}"
+                )
+                RingtoneService.start(context, alarm, resumable = false, path = testPath)
             }
 
             AlarmScheduler.ACTION_SNOOZE_FIRE -> {

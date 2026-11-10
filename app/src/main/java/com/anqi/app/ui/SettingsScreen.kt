@@ -26,7 +26,9 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -40,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import com.anqi.app.BuildConfig
 import com.anqi.app.ui.theme.Anqi
 import com.anqi.app.viewmodel.AlarmViewModel
+import kotlinx.coroutines.delay
 
 @Composable
 fun SettingsScreen(
@@ -173,6 +176,16 @@ fun SettingsScreen(
                 }
 
                 Spacer(Modifier.height(32.dp))
+                SectionLabel("清后台还响不响")
+                Spacer(Modifier.height(10.dp))
+                SwipeTestCard(viewModel)
+
+                Spacer(Modifier.height(32.dp))
+                SectionLabel("别让系统清掉它")
+                Spacer(Modifier.height(10.dp))
+                OemSetupCard(viewModel)
+
+                Spacer(Modifier.height(32.dp))
                 SectionLabel("后台守护")
                 Spacer(Modifier.height(10.dp))
                 Surface(
@@ -220,33 +233,6 @@ fun SettingsScreen(
                                 color = Anqi.palette.muted
                             )
                         }
-                    }
-                }
-
-                Spacer(Modifier.height(10.dp))
-                Surface(
-                    color = Anqi.palette.raised,
-                    shape = RoundedCornerShape(20.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(Modifier.padding(18.dp)) {
-                        Text(
-                            "别让系统把它清掉",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Anqi.palette.ink
-                        )
-                        Spacer(Modifier.height(5.dp))
-                        Text(
-                            "如果遇到过被系统清理，再补这三件事：加省电白名单、允许自启动、在最近任务里长按本应用卡片锁定它。",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Anqi.palette.muted
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        AnqiTextButton(
-                            "打开省电设置",
-                            onClick = onOpenBatterySettings,
-                            color = Anqi.palette.signal
-                        )
                     }
                 }
 
@@ -405,6 +391,226 @@ fun SettingsScreen(
                     }
                 }
                 Spacer(Modifier.height(30.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun SwipeTestCard(viewModel: AlarmViewModel) {
+    val verdict = viewModel.swipeVerdict
+    val pending = viewModel.swipePending
+    var hint by remember { mutableStateOf<String?>(null) }
+
+    // The countdown is the only thing on this screen that moves, so it drives its
+    // own tick: without it the seconds would sit frozen until the next 30-second
+    // recomposition and the user would think the test had stalled.
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(pending) {
+        while (pending) {
+            now = System.currentTimeMillis()
+            delay(1_000)
+        }
+    }
+
+    Surface(
+        color = Anqi.palette.surface,
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(18.dp)) {
+            Text(
+                when {
+                    pending -> "正在实测"
+                    verdict == null -> "先测一次，别等下个月"
+                    verdict.late -> "上次实测：响了，但迟了很久"
+                    verdict.rang && verdict.swiped -> "上次实测：通过"
+                    verdict.rang -> "上次实测：响了，但没测到清后台"
+                    else -> "上次实测：没响"
+                },
+                style = MaterialTheme.typography.titleMedium,
+                color = if (verdict != null && !verdict.rang) Anqi.palette.signal else Anqi.palette.ink
+            )
+            Spacer(Modifier.height(5.dp))
+            Text(
+                when {
+                    pending -> {
+                        val seconds = ((viewModel.swipePendingAt - now) / 1000).coerceAtLeast(0)
+                        "$seconds 秒后响铃。现在就把应用从最近任务里划掉，然后等它响——" +
+                            "别打开应用，打开了就不算数了。"
+                    }
+
+                    verdict == null ->
+                        "一分钟后就响一次。响之前把应用从最近任务划掉，看它还响不响。" +
+                            "这是唯一能确定「清后台之后还能不能提醒」的办法，不用等下个月。"
+
+                    verdict.late ->
+                        "提醒最终还是响了，但没有按时响——系统把它压了很久。这意味着夜里它也可能迟到，" +
+                            "请把下面的省电策略改成「无限制」，然后再测一次。"
+
+                    verdict.rang && verdict.swiped ->
+                        "应用被划掉、进程也没了，提醒还是响了（" +
+                            (if (verdict.path == "service") "由系统直接唤起响铃" else "由广播送达") +
+                            "）。这台手机现在是可靠的。"
+
+                    verdict.rang ->
+                        "提醒响了，说明响铃本身没问题；但进程中途没有被杀掉，" +
+                            "所以这次没测到「清后台」。想测它，请在响铃之前就划掉应用，然后先别打开它。"
+
+                    else ->
+                        "排期的那次提醒没有响。说明这台手机把应用划掉之后就冻住了，" +
+                            "系统不再给它任何触发。请先完成下面的三步设置，再测一次。"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = Anqi.palette.muted
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (pending) {
+                    AnqiTextButton(
+                        "取消实测",
+                        onClick = { viewModel.cancelSwipeTest(); hint = null },
+                        color = Anqi.palette.muted
+                    )
+                } else {
+                    AnqiTextButton(
+                        "开始实测",
+                        onClick = {
+                            val target = viewModel.startSwipeTest()
+                            hint = if (target == null) {
+                                "还没有启用的提醒，先新建一个再测。"
+                            } else {
+                                "已排期，「${target.label.ifBlank { "提醒" }}」将在一分钟后响。现在划掉应用。"
+                            }
+                        },
+                        color = Anqi.palette.signal
+                    )
+                }
+            }
+            hint?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Anqi.palette.signal
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OemSetupCard(viewModel: AlarmViewModel) {
+    Surface(
+        color = Anqi.palette.raised,
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(18.dp)) {
+            Text(
+                "三步就好",
+                style = MaterialTheme.typography.titleMedium,
+                color = Anqi.palette.ink
+            )
+            Spacer(Modifier.height(5.dp))
+            Text(
+                "国产系统把应用从最近任务划掉之后会直接冻住它，不再送闹钟。" +
+                    "这是系统的策略，代码绕不过去；把这三件打开就解除了。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Anqi.palette.muted
+            )
+            Spacer(Modifier.height(12.dp))
+            SetupStep(
+                index = "1",
+                title = "允许自启动",
+                detail = "不然划掉之后系统不允许它自己醒过来。",
+                action = "打开自启动设置",
+                onOpen = { viewModel.openAutostart() }
+            )
+            SetupStep(
+                index = "2",
+                title = "省电策略改为「无限制」",
+                detail = "省电模式会在夜里把后台整个冻住。",
+                action = "打开省电设置",
+                onOpen = { viewModel.openBatterySettings() },
+                // The only one of the three the app can actually check, so it is
+                // the only one that gets a checkmark instead of a request.
+                verified = viewModel.batteryUnrestricted
+            )
+            SetupStep(
+                index = "3",
+                title = "在最近任务里锁定本应用",
+                detail = "长按本应用的卡片，选锁形图标；锁定的应用不会被一键清理掉。",
+                action = "打开应用信息",
+                onOpen = { viewModel.openAppInfo() }
+            )
+            Spacer(Modifier.height(6.dp))
+            if (viewModel.setupDone) {
+                Text(
+                    "已记录。之后每次实测都会验证这三步是不是真的生效了。",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Anqi.palette.muted
+                )
+            } else {
+                AnqiTextButton(
+                    "这三步我已经设好了",
+                    onClick = viewModel::markSetupDone,
+                    color = Anqi.palette.signal
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SetupStep(
+    index: String,
+    title: String,
+    detail: String,
+    action: String,
+    onOpen: () -> Unit,
+    verified: Boolean? = null
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 7.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Box(
+            Modifier
+                .size(20.dp)
+                .background(
+                    if (verified == true) Anqi.palette.signal else Anqi.palette.signalSoft,
+                    RoundedCornerShape(7.dp)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                if (verified == true) "✓" else index,
+                style = MaterialTheme.typography.labelMedium,
+                color = if (verified == true) Anqi.palette.onSignal else Anqi.palette.signal
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = Anqi.palette.ink
+            )
+            Text(
+                detail,
+                style = MaterialTheme.typography.labelMedium,
+                color = Anqi.palette.muted
+            )
+            if (verified == true) {
+                Text(
+                    "已经是无限制了",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Anqi.palette.signal
+                )
+            } else {
+                AnqiTextButton(action, onClick = onOpen, color = Anqi.palette.signal)
             }
         }
     }

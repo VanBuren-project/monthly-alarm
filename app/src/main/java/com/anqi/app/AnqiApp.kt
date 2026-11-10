@@ -5,6 +5,7 @@ import com.anqi.app.alarm.AlarmNotifier
 import com.anqi.app.alarm.Diag
 import com.anqi.app.alarm.GuardService
 import com.anqi.app.alarm.SelfHeal
+import com.anqi.app.alarm.SwipeTest
 import com.anqi.app.data.AlarmStore
 
 class AnqiApp : Application() {
@@ -12,6 +13,11 @@ class AnqiApp : Application() {
         super.onCreate()
         AlarmNotifier.ensureChannel(this)
         Diag.log(this, "APP 进程启动")
+
+        // Bumped before anything else looks at it: the swipe test can only tell
+        // "the ring survived a swipe" from "nothing was swiped" by noticing that
+        // the process was torn down and came back.
+        SwipeTest.noteProcessStart(this)
 
         // Four independent layers, because each one alone has already been
         // proven insufficient on a real device:

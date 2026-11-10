@@ -221,8 +221,17 @@ class UiPreviewTest {
         assertTrue(
             compose.onAllNodesWithText("系统权限").fetchSemanticsNodes().isNotEmpty()
         )
+        // 1.3.6 replaces the old "别让系统把它清掉" advice card with a measured
+        // swipe test plus a walkthrough that deep-links into the OEM screen,
+        // because advice alone was what kept failing on the user's phone.
         assertTrue(
-            compose.onAllNodesWithText("别让系统把它清掉").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithText("清后台还响不响").fetchSemanticsNodes().isNotEmpty()
+        )
+        assertTrue(
+            compose.onAllNodesWithText("别让系统清掉它").fetchSemanticsNodes().isNotEmpty()
+        )
+        assertTrue(
+            compose.onAllNodesWithText("三步就好").fetchSemanticsNodes().isNotEmpty()
         )
         // 1.3.5 made delivery independent of a resident process (the exact alarm
         // starts the ringing service itself, like the stock clock), so the guard
@@ -234,6 +243,53 @@ class UiPreviewTest {
             compose.onAllNodesWithText("多一层保险").fetchSemanticsNodes().isNotEmpty()
         )
         capture("settings-360")
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h800dp-xhdpi")
+    fun phoneSettingsSwipeTestNeverRun() {
+        showHome()
+        compose.onNodeWithText("设置").performClick()
+        compose.waitForIdle()
+        // Never measured is its own state: it must not read as either pass or
+        // fail, or the user would think the phone had been verified.
+        assertTrue(
+            compose.onAllNodesWithText("先测一次，别等下个月").fetchSemanticsNodes().isNotEmpty()
+        )
+        compose.onNodeWithText("开始实测").performScrollTo()
+        compose.waitForIdle()
+        assertTrue(
+            compose.onAllNodesWithText("打开自启动设置").fetchSemanticsNodes().isNotEmpty()
+        )
+        capture("settings-swipe-360")
+    }
+
+    /**
+     * The three OEM steps are the actual answer to "清后台之后不响", so they get
+     * a shot of their own — scrolling to the swipe card above would leave them
+     * off-screen, and a deliverable image that cuts the fix off is worse than none.
+     */
+    @Test
+    @Config(qualifiers = "w360dp-h800dp-xhdpi")
+    fun phoneSettingsOemSteps() {
+        showHome()
+        compose.onNodeWithText("设置").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("这三步我已经设好了").performScrollTo()
+        compose.waitForIdle()
+        assertTrue(
+            compose.onAllNodesWithText("三步就好").fetchSemanticsNodes().isNotEmpty()
+        )
+        assertTrue(
+            compose.onAllNodesWithText("允许自启动").fetchSemanticsNodes().isNotEmpty()
+        )
+        assertTrue(
+            compose.onAllNodesWithText("省电策略改为「无限制」").fetchSemanticsNodes().isNotEmpty()
+        )
+        assertTrue(
+            compose.onAllNodesWithText("在最近任务里锁定本应用").fetchSemanticsNodes().isNotEmpty()
+        )
+        capture("settings-oem-360")
     }
 
     @Test

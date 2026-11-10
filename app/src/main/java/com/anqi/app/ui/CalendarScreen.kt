@@ -111,7 +111,11 @@ fun MainTabs(
     onToday: () -> Unit,
     onRequestNotifications: () -> Unit,
     onOpenExactAlarmSettings: () -> Unit,
-    onOpenFullScreenSettings: () -> Unit
+    onOpenFullScreenSettings: () -> Unit,
+    swipeFailed: Boolean = false,
+    swipeLate: Boolean = false,
+    missedCount: Int = 0,
+    onOpenAutostart: () -> Unit = {}
 ) {
     Column(modifier.fillMaxSize()) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -137,6 +141,10 @@ fun MainTabs(
                     onRequestNotifications = onRequestNotifications,
                     onOpenExactAlarmSettings = onOpenExactAlarmSettings,
                     onOpenFullScreenSettings = onOpenFullScreenSettings,
+                    swipeFailed = swipeFailed,
+                    swipeLate = swipeLate,
+                    missedCount = missedCount,
+                    onOpenAutostart = onOpenAutostart,
                     navigationPadding = false
                 )
 

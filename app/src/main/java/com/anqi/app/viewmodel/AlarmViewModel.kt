@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -18,6 +19,8 @@ import com.anqi.app.alarm.ArmLedger
 import com.anqi.app.alarm.Diag
 import com.anqi.app.alarm.GuardJob
 import com.anqi.app.alarm.GuardService
+import com.anqi.app.alarm.OemAutostart
+import com.anqi.app.alarm.SwipeTest
 import com.anqi.app.data.AlarmStore
 import com.anqi.app.data.NextOccurrence
 import com.anqi.app.model.Alarm
@@ -51,6 +54,29 @@ class AlarmViewModel(application: Application) : AndroidViewModel(application) {
     var diagLines by mutableStateOf(Diag.read(application).reversed())
         private set
 
+    /** Whether the OEM autostart / recents-lock walkthrough has been seen. */
+    var setupDone by mutableStateOf(SwipeTest.setupDone(application))
+        private set
+
+    /** OEM name for the copy, or null when we have no specific screen for it. */
+    val oemLabel: String? = OemAutostart.label(application)
+
+    /** Whether the system already exempts us from battery optimisation. */
+    var batteryUnrestricted by mutableStateOf(OemAutostart.isBatteryUnrestricted(application))
+        private set
+
+    /** True while a swipe test is armed and its slot has not been judged yet. */
+    var swipePending by mutableStateOf(SwipeTest.isPending(application))
+        private set
+
+    /** When the armed swipe test is due, for the countdown in settings. */
+    var swipePendingAt by mutableLongStateOf(SwipeTest.pendingAt(application))
+        private set
+
+    /** The last measured swipe test, or null when it was never run. */
+    var swipeVerdict by mutableStateOf(SwipeTest.verdict(application))
+        private set
+
     init {
         reload()
     }
@@ -70,6 +96,11 @@ class AlarmViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshReadiness() {
         readiness = checkReadiness()
         missedCount = ArmLedger.missedCount(getApplication())
+        swipePending = SwipeTest.isPending(getApplication())
+        swipePendingAt = SwipeTest.pendingAt(getApplication())
+        swipeVerdict = SwipeTest.verdict(getApplication())
+        setupDone = SwipeTest.setupDone(getApplication())
+        batteryUnrestricted = OemAutostart.isBatteryUnrestricted(getApplication())
     }
 
     fun save(alarm: Alarm): Alarm {
@@ -142,8 +173,39 @@ class AlarmViewModel(application: Application) : AndroidViewModel(application) {
         return target
     }
 
-    fun upcoming(limit: Int = 3): List<Pair<Alarm, java.time.ZonedDateTime>> {
-        val now = java.time.ZonedDateTime.now()
+    /**
+     * Arms the swipe test against the first enabled reminder.
+     *
+     * @return the reminder used, or null when there is nothing to ring with
+     *   (a test with no reminder has nothing to load when it fires).
+     */
+    fun startSwipeTest(): Alarm? {
+        val target = alarms.firstOrNull { it.enabled } ?: return null
+        if (!SwipeTest.start(getApplication(), target.id)) return null
+        refreshReadiness()
+        refreshDiag()
+        return target
+    }
+
+    fun cancelSwipeTest() {
+        SwipeTest.cancel(getApplication())
+        refreshReadiness()
+        refreshDiag()
+    }
+
+    fun markSetupDone() {
+        SwipeTest.markSetupDone(getApplication())
+        setupDone = true
+    }
+
+    /** Opens the OEM autostart screen, falling back to app info. */
+    fun openAutostart(): Boolean = OemAutostart.open(getApplication())
+
+    fun openBatterySettings(): Boolean = OemAutostart.openBattery(getApplication())
+
+    fun openAppInfo(): Boolean = OemAutostart.openAppInfo(getApplication())
+
+    fun upcoming(limit: Int = 3): List<Pair<Alarm, java.time.ZonedDateTime>> {        val now = java.time.ZonedDateTime.now()
         return alarms.asSequence()
             .filter { it.enabled }
             .flatMap { alarm ->
