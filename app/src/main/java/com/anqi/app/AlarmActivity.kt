@@ -1,5 +1,6 @@
 package com.anqi.app
 
+import android.app.KeyguardManager
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -25,16 +26,7 @@ class AlarmActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(true)
-            setTurnScreenOn(true)
-        } else {
-            @Suppress("DEPRECATION")
-            window.addFlags(
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-            )
-        }
+        showOverLockScreen()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -45,7 +37,10 @@ class AlarmActivity : ComponentActivity() {
 
         setContent {
             val alarm = alarmState
-            AnqiTheme(darkTheme = true) {
+            // Follow the system theme, exactly like the main app: forcing a dark
+            // canvas here is what made the ringing page look like a foreign,
+            // all-black screen next to the app's warm light theme.
+            AnqiTheme {
                 if (alarm != null) {
                     RingingScreen(
                         alarm = alarm,
@@ -62,6 +57,30 @@ class AlarmActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         loadAlarm(intent)
+    }
+
+    /**
+     * Two independent things have to happen for an alarm to be usable from a
+     * sleeping phone: the display must turn on, and the activity must be allowed
+     * to draw above the keyguard. `setTurnScreenOn` covers the first on API 27+;
+     * the window flags are the pre-27 path and also cover ROMs that ignore the
+     * newer API.
+     */
+    private fun showOverLockScreen() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        }
+        @Suppress("DEPRECATION")
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+        )
+        // Dismissing is best-effort: on a secured lock screen the request is
+        // simply ignored, and the activity still shows above the keyguard.
+        val keyguard = getSystemService(KeyguardManager::class.java)
+        runCatching { keyguard?.requestDismissKeyguard(this, null) }
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {

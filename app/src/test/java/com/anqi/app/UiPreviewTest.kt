@@ -17,6 +17,7 @@ import com.anqi.app.data.AlarmStore
 import com.anqi.app.model.Alarm
 import com.anqi.app.model.RepeatType
 import com.anqi.app.ui.AnqiRoot
+import com.anqi.app.ui.RingingScreen
 import com.anqi.app.ui.theme.AnqiTheme
 import com.anqi.app.viewmodel.AlarmViewModel
 import org.junit.Assert.assertTrue
@@ -208,5 +209,60 @@ class UiPreviewTest {
                 .fetchSemanticsNodes().isNotEmpty()
         )
         capture("about-360")
+    }
+
+    private fun alarmForRinging() = Alarm(
+        id = 7L,
+        label = "交电费",
+        note = "这个月有 7 折优惠，记得先在 App 里领券再交。",
+        repeatType = RepeatType.MONTHLY_DAY,
+        monthlyDay = 8,
+        hour = 8,
+        minute = 0,
+        date = LocalDate.now(),
+        vibrate = true
+    )
+
+    /**
+     * Guards the "black screen" regression: the ringing face must inherit the app
+     * palette in both modes, so its canvas has to match the window background that
+     * [com.anqi.app.AlarmActivity] uses for the very first frame.
+     */
+    private fun showRinging(dark: Boolean) {
+        compose.setContent {
+            AnqiTheme(darkTheme = dark) {
+                RingingScreen(
+                    alarm = alarmForRinging(),
+                    snoozeMinutes = 5,
+                    onSnooze = {},
+                    onDismiss = {}
+                )
+            }
+        }
+        compose.waitForIdle()
+        assertTrue(
+            compose.onAllNodesWithTag("ringing-screen").fetchSemanticsNodes().isNotEmpty()
+        )
+        assertTrue(
+            compose.onAllNodesWithText("正在响铃").fetchSemanticsNodes().isNotEmpty()
+        )
+        assertTrue(
+            compose.onAllNodesWithText("停止后", substring = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        )
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h800dp-xhdpi")
+    fun ringingDark() {
+        showRinging(dark = true)
+        capture("ringing-dark-360")
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h800dp-xhdpi")
+    fun ringingLight() {
+        showRinging(dark = false)
+        capture("ringing-light-360")
     }
 }

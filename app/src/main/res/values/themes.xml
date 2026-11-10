@@ -11,4 +11,23 @@
         <item name="android:windowActionModeOverlay">true</item>
         <item name="android:windowDisablePreview">false</item>
     </style>
+
+    <!--
+      The ringing screen paints its own canvas, but the window behind it is
+      visible for a frame while Compose inflates. Matching the palette there (and
+      in values-night) removes the flash that made the alarm look like an
+      unrelated black screen.
+    -->
+    <style name="Theme.Anqi.Alarm" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowBackground">@color/anqi_alarm_window_bg</item>
+        <item name="android:colorAccent">#E95146</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowShowWallpaper">false</item>
+        <item name="android:windowDisablePreview">false</item>
+    </style>
 </resources>

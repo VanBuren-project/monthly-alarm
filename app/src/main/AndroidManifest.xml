@@ -34,11 +34,13 @@
 
         <activity
             android:name=".AlarmActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
             android:excludeFromRecents="true"
             android:exported="false"
             android:launchMode="singleTask"
             android:showWhenLocked="true"
             android:taskAffinity="com.anqi.app.alarm"
+            android:theme="@style/Theme.Anqi.Alarm"
             android:turnScreenOn="true"
             tools:targetApi="o_mr1" />
 

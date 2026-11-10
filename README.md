@@ -6,13 +6,13 @@
 
 ## 下载
 
-**[⬇ 下载 anqi-1.3.1.apk](https://github.com/VanBuren-project/monthly-alarm/releases/download/v1.3.1/anqi-1.3.1.apk)** · 7.2 MB
+**[⬇ 下载 anqi-1.3.2.apk](https://github.com/VanBuren-project/monthly-alarm/releases/download/v1.3.2/anqi-1.3.2.apk)** · 7.1 MB
 
-SHA-256：`DCB02A17E2FE1016491BED46FE9794AED37EE7FA22AF28BA2887D833AF081A4E`
+SHA-256：`BED7B94093CAB0189C19BF3251DB8C243BFBB2A5CDFF62B358D81108B9836700`
 
 也可以到 [Releases](https://github.com/VanBuren-project/monthly-alarm/releases) 页面查看更新说明与校验文件。
 
-> **升级提示**：1.3.0 使用的是开发调试证书，1.3.1 起改用正式发布证书。两者签名不同，Android 不允许直接覆盖安装——请先卸载 1.3.0（已设的提醒会一并清除），再安装 1.3.1。之后再升级都可以直接覆盖。
+> **升级提示**：1.3.0 使用的是开发调试证书，1.3.1 起改用正式发布证书。两者签名不同，Android 不允许直接覆盖安装——请先卸载 1.3.0（已设的提醒会一并清除），再安装新版。从 1.3.1 起签名一致，之后可以一直直接覆盖升级，提醒数据保留。
 
 ## 它解决什么问题
 
@@ -43,7 +43,7 @@ SHA-256：`DCB02A17E2FE1016491BED46FE9794AED37EE7FA22AF28BA2887D833AF081A4E`
 
 - 应用名：月度闹钟
 - 包名：`com.anqi.app`
-- 版本：1.3.1（versionCode 6）
+- 版本：1.3.2（versionCode 7）
 - 最低系统：Android 8.0（API 26）
 - 目标系统：Android 16（API 36）
 - 构建：Kotlin + Jetpack Compose + Material 3，release 构建（正式发布证书，RSA 4096 / v2 签名）
@@ -67,9 +67,10 @@ SHA-256：`DCB02A17E2FE1016491BED46FE9794AED37EE7FA22AF28BA2887D833AF081A4E`
 - 编辑页展示接下来三次提醒，保存前即可检查规则
 - 首页只展示每个提醒的下一次，按时间排序；其余提醒在「接下来」中列出
 - 开关用于暂停/恢复；单次提醒触发后自动关闭
-- 全屏响铃：贪睡（默认 10 分钟，可在设置中调为 1–120 分钟）、停止
+- 全屏响铃：息屏时自动亮屏并弹出响铃页，贪睡（默认 10 分钟，可在设置中调为 1–120 分钟）、停止；全屏通知被厂商拦截时由响铃服务直接拉起页面兜底
 - 音量加/减键可直接贪睡
-- 震动开关、系统默认铃声
+- 震动开关：开启后按 `USAGE_ALARM` 通道循环震动（震动/静音模式同样生效），关闭则不震
+- 系统默认铃声，响铃页配色、字体与主界面一致，深浅色跟随系统
 - 开机、时间变更、时区变更后自动重排
 - 精确闹钟权限缺失时降级为约 60 秒窗口，并在首页提示权限问题
 
@@ -106,6 +107,7 @@ SHA-256：`DCB02A17E2FE1016491BED46FE9794AED37EE7FA22AF28BA2887D833AF081A4E`
 - [周视图 360dp](preview/week-360.png)
 - [周视图含提醒块](preview/week-event-360.png)
 - [关于与声明 360dp](preview/about-360.png)
+- [响铃页 360dp（深色）](preview/ringing-dark-360.png)、[响铃页 360dp（浅色）](preview/ringing-light-360.png)
 
 启动器图标按自适应图标前景层重新裁切居中，预览见 [`preview/icon-preview.png`](preview/icon-preview.png)。
 
@@ -119,7 +121,7 @@ SHA-256：`DCB02A17E2FE1016491BED46FE9794AED37EE7FA22AF28BA2887D833AF081A4E`
 
 ## 安装
 
-1. 从 [Releases](https://github.com/VanBuren-project/monthly-alarm/releases) 下载 `anqi-1.3.1.apk`（或使用自己构建的 `app/build/outputs/apk/release/app-release.apk`）传到手机。
+1. 从 [Releases](https://github.com/VanBuren-project/monthly-alarm/releases) 下载 `anqi-1.3.2.apk`（或使用自己构建的 `app/build/outputs/apk/release/app-release.apk`）传到手机。
 2. 如果手机上装过 1.3.0 或更早的调试证书版本，先卸载再安装（签名不同，无法覆盖）。
 3. 在系统设置中允许文件管理器/浏览器「安装未知应用」。
 3. 安装并打开「月度闹钟」。
@@ -176,7 +178,7 @@ distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-bin.zip
 仓库：<https://github.com/VanBuren-project/monthly-alarm>
 发布页：<https://github.com/VanBuren-project/monthly-alarm/releases>
 
-`v1.3.1` 的 tag、源码、APK、`RELEASE_NOTES.md` 与 `SHA256SUMS.txt` 已发布，APK 使用正式发布证书签名。
+`v1.3.2` 的 tag、源码、APK、`RELEASE_NOTES.md` 与 `SHA256SUMS.txt` 已发布，APK 使用正式发布证书签名。
 
 ### 签名与密钥
 
@@ -205,11 +207,11 @@ keyPassword=你的密码
 ## 已验证
 
 - `assembleRelease`：成功
-- `testDebugUnitTest`：11 个规则测试 + 7 个日历投影测试 + 9 个 Robolectric/Compose 界面测试，0 失败
-- 电脑端真实 Compose 渲染：360dp 所有/年/月/周/关于、411dp 编辑器、840dp 双栏，截图见 `preview/`
-- `lintDebug`：0 errors，9 warnings（依赖版本、adaptive icon monochrome 等）
+- `testDebugUnitTest`：11 个规则测试 + 7 个日历投影测试 + 11 个 Robolectric/Compose 界面测试（含响铃页深浅色各一张），0 失败
+- 电脑端真实 Compose 渲染：360dp 所有/年/月/周/关于/响铃页、411dp 编辑器、840dp 双栏，截图见 `preview/`
+- `lintDebug`：0 errors，6 warnings（依赖版本、adaptive icon monochrome、launcher 形状）
 - APK：`zipalign` 通过，APK Signature Scheme v2 验签通过（正式证书 `4B:0D:89:66:F9:7B:C2:1C:A1:94:F7:95:27:7C:DF:6B:AC:82:34:27:F4:F2:82:48:C2:69:93:20:3F:7C:40:A0`）
-- 包名 `com.anqi.app`、应用名「月度闹钟」、版本 1.3.1（versionCode 6）、minSdk 26 / targetSdk 36 已用 `aapt2 dump badging` 核对
+- 包名 `com.anqi.app`、应用名「月度闹钟」、版本 1.3.2（versionCode 7）、minSdk 26 / targetSdk 36 已用 `aapt2 dump badging` 核对
 
 **未验证**：本机没有可用的硬件加速模拟器（AEHD 安装需要管理员/UAC 授权），也没有连接 Android 手机，因此自动化环节未覆盖真机锁屏响铃和国产 ROM 后台限制的实机验收（作者已在自用手机上手工验证 1.3.0 的日常响铃）。
 

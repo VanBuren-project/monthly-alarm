@@ -11,6 +11,7 @@ import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.os.Build
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -20,40 +21,68 @@ import com.anqi.app.model.Alarm
 import java.util.Locale
 
 object AlarmNotifier {
-    const val CHANNEL_ID = "anqi_alarm"
+    /**
+     * Bumped from `anqi_alarm` because channel settings are immutable once
+     * created: the first build shipped a channel with vibration disabled, and only
+     * a new id can pick up an alarm-grade configuration on installed devices.
+     */
+    const val CHANNEL_ID = "anqi_alarm_v2"
+
+    /** Mirror of [CHANNEL_ID] for alarms whose 震动 switch is off. */
+    private const val QUIET_CHANNEL_ID = "anqi_alarm_v2_quiet"
+    private const val LEGACY_CHANNEL_ID = "anqi_alarm"
     const val NOTIFICATION_BASE = 7100
+
+    private val VIBRATION_PATTERN = longArrayOf(0L, 800L, 600L, 800L, 600L)
 
     fun ensureChannel(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java)
-        if (manager.getNotificationChannel(CHANNEL_ID) != null) return
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            context.getString(R.string.channel_alarm_name),
-            NotificationManager.IMPORTANCE_HIGH
-        ).apply {
-            description = context.getString(R.string.channel_alarm_desc)
-            setSound(null, null)
-            enableVibration(false)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            setBypassDnd(false)
+        // The 1.3.x channel was created silent; it can never be changed in place.
+        runCatching { manager.deleteNotificationChannel(LEGACY_CHANNEL_ID) }
+
+        if (manager.getNotificationChannel(CHANNEL_ID) == null) {
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_ID,
+                    context.getString(R.string.channel_alarm_name),
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = context.getString(R.string.channel_alarm_desc)
+                    // Sound stays off: RingtoneService loops the alarm tone and the
+                    // channel could only play it once. Vibration stays on as a
+                    // safety net for ROMs that drop the service's waveform.
+                    setSound(null, null)
+                    enableVibration(true)
+                    vibrationPattern = VIBRATION_PATTERN
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                    setShowBadge(false)
+                }
+            )
         }
-        manager.createNotificationChannel(channel)
+        if (manager.getNotificationChannel(QUIET_CHANNEL_ID) == null) {
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    QUIET_CHANNEL_ID,
+                    context.getString(R.string.channel_alarm_quiet_name),
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = context.getString(R.string.channel_alarm_desc)
+                    setSound(null, null)
+                    enableVibration(false)
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                    setShowBadge(false)
+                }
+            )
+        }
     }
 
     fun build(context: Context, alarm: Alarm, includeFullScreen: Boolean = true): Notification {
         ensureChannel(context)
-        val notificationId = NOTIFICATION_BASE + alarm.id.toInt()
+        val notificationId = notificationId(alarm.id)
         val time = String.format(Locale.US, "%02d:%02d", alarm.hour, alarm.minute)
         val label = alarm.label.ifBlank { context.getString(R.string.alarm_default_label) }
 
-        val contentIntent = PendingIntent.getActivity(
-            context,
-            notificationId,
-            Intent(context, AlarmActivity::class.java)
-                .putExtra(AlarmScheduler.EXTRA_ID, alarm.id)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val contentIntent = ringIntent(context, notificationId, alarm.id)
 
         val snoozeIntent = PendingIntent.getBroadcast(
             context,
@@ -73,7 +102,8 @@ object AlarmNotifier {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+        val channel = if (alarm.vibrate) CHANNEL_ID else QUIET_CHANNEL_ID
+        val builder = NotificationCompat.Builder(context, channel)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("$time  $label")
             .setContentText(context.getString(R.string.alarm_notification_title))
@@ -85,9 +115,20 @@ object AlarmNotifier {
             .setShowWhen(false)
             .setContentIntent(contentIntent)
             .setDeleteIntent(dismissIntent)
-            .addAction(R.drawable.ic_notification, context.getString(R.string.alarm_snooze), snoozeIntent)
-            .addAction(R.drawable.ic_notification, context.getString(R.string.alarm_dismiss), dismissIntent)
+            .setTimeoutAfter(6 * 60_000L)
+            .addAction(
+                R.drawable.ic_notification,
+                context.getString(R.string.alarm_snooze),
+                snoozeIntent
+            )
+            .addAction(
+                R.drawable.ic_notification,
+                context.getString(R.string.alarm_dismiss),
+                dismissIntent
+            )
             .setSound(null)
+            // null means "inherit the channel": buzz for the alarm channel, stay
+            // still for the quiet one.
             .setVibrate(null)
 
         if (includeFullScreen) {
@@ -99,10 +140,25 @@ object AlarmNotifier {
         return builder.build()
     }
 
+    private fun ringIntent(context: Context, requestCode: Int, alarmId: Long): PendingIntent =
+        PendingIntent.getActivity(
+            context,
+            requestCode,
+            Intent(context, AlarmActivity::class.java)
+                .putExtra(AlarmScheduler.EXTRA_ID, alarmId)
+                .addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP
+                ),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
     /**
-     * Full-screen notifications are the sanctioned path, but several OEM builds
-     * silently drop them. Opening the ringing screen from the foreground service
-     * as well gives the user a reliable way to dismiss the alarm.
+     * Full-screen notifications are the sanctioned path, but they are also the
+     * first thing OEM ROMs disable. Starting the activity from the ringing
+     * foreground service is the fallback; when the ROM blocks it, the exception is
+     * logged instead of silently swallowed so a bug report can tell the two apart.
      */
     fun launch(context: Context, alarm: Alarm) {
         val intent = Intent(context, AlarmActivity::class.java)
@@ -110,30 +166,51 @@ object AlarmNotifier {
             .addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_NO_USER_ACTION
             )
         runCatching { context.startActivity(intent) }
+            .onFailure { error ->
+                android.util.Log.w(
+                    "AnqiNotifier",
+                    "startActivity blocked (fullScreen=${canUseFullScreenIntent(context)}, " +
+                        "overlay=${canDrawOverlays(context)})",
+                    error
+                )
+            }
     }
 
+    // The POST_NOTIFICATIONS guard is inlined instead of delegated to
+    // canPostNotifications(): lint only trusts a checkSelfPermission call that is
+    // visible in this method, and the annotation documents that trade-off.
+    @android.annotation.SuppressLint("MissingPermission")
     fun notify(context: Context, alarm: Alarm) {
         ensureChannel(context)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            return
-        }
+        if (!canPostNotifications(context)) return
         runCatching {
             NotificationManagerCompat.from(context)
-                .notify(NOTIFICATION_BASE + alarm.id.toInt(), build(context, alarm))
+                .notify(notificationId(alarm.id), build(context, alarm))
         }
     }
 
     fun cancel(context: Context, alarmId: Long) {
-        NotificationManagerCompat.from(context).cancel(NOTIFICATION_BASE + alarmId.toInt())
+        NotificationManagerCompat.from(context).cancel(notificationId(alarmId))
     }
+
+    fun canPostNotifications(context: Context): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+
+    fun canUseFullScreenIntent(context: Context): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
+            context.getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
+
+    fun canDrawOverlays(context: Context): Boolean = Settings.canDrawOverlays(context)
+
+    fun notificationId(alarmId: Long): Int = NOTIFICATION_BASE + alarmId.toInt()
 
     fun alarmSoundUri(): android.net.Uri =
         RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)

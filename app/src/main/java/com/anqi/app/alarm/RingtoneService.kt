@@ -3,6 +3,8 @@ package com.anqi.app.alarm
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
@@ -10,6 +12,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -23,6 +26,7 @@ class RingtoneService : Service() {
     private var player: MediaPlayer? = null
     private var vibrator: Vibrator? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var screenLock: PowerManager.WakeLock? = null
     private val handler = Handler(Looper.getMainLooper())
     private var currentAlarmId: Long = -1L
 
@@ -56,6 +60,10 @@ class RingtoneService : Service() {
         if (player == null) startSound(alarm)
         if (alarm.vibrate) startVibration()
         acquireWakeLock()
+        // A partial wake lock keeps the CPU alive but never lights the panel. The
+        // ringing screen normally does that through setTurnScreenOn(); this short
+        // full wake lock covers the case where the OEM refuses to start it.
+        wakeScreen()
         // Some OEMs ignore full-screen notifications. Open the ringing screen
         // directly from the foreground service so the alarm is always dismissible.
         AlarmNotifier.launch(this, alarm)
@@ -99,6 +107,12 @@ class RingtoneService : Service() {
         player = null
     }
 
+    /**
+     * Vibration is tagged with [android.os.VibrationAttributes.USAGE_ALARM]. Without
+     * that tag the platform routes the pattern through the "touch" channel, which
+     * stays silent when the phone is in vibrate/silent mode. The channel-level
+     * vibration is deliberately off, because that one only fires once.
+     */
     private fun startVibration() {
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             getSystemService(VibratorManager::class.java)?.defaultVibrator
@@ -107,9 +121,31 @@ class RingtoneService : Service() {
             getSystemService(Vibrator::class.java)
         }
         this.vibrator = vibrator
-        if (vibrator?.hasVibrator() != true) return
-        val pattern = longArrayOf(0L, 700L, 500L, 700L, 500L)
-        vibrator.vibrate(VibrationEffect.createWaveform(pattern, 0))
+        if (vibrator == null || !vibrator.hasVibrator()) {
+            Log.w(TAG, "Device reports no vibrator")
+            return
+        }
+
+        // Repeat from index 0, so the alarm keeps buzzing until it is stopped.
+        val pattern = longArrayOf(0L, 800L, 600L, 800L, 600L)
+        val effect = VibrationEffect.createWaveform(pattern, 0)
+
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                vibrator.vibrate(
+                    effect,
+                    VibrationAttributes.Builder()
+                        .setUsage(VibrationAttributes.USAGE_ALARM)
+                        .build()
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(effect, AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build())
+            }
+        }.onFailure { Log.e(TAG, "Unable to start vibration", it) }
     }
 
     private fun stopVibration() {
@@ -126,9 +162,33 @@ class RingtoneService : Service() {
         }
     }
 
+    /**
+     * Briefly holds a full wake lock so the display lights up even when the
+     * ringing activity never becomes visible. It is released as soon as the
+     * activity has had time to attach its own FLAG_KEEP_SCREEN_ON.
+     */
+    private fun wakeScreen() {
+        if (screenLock?.isHeld == true) return
+        val power = getSystemService(PowerManager::class.java)
+        @Suppress("DEPRECATION")
+        val level = PowerManager.FULL_WAKE_LOCK
+        runCatching {
+            @Suppress("DEPRECATION")
+            screenLock = power.newWakeLock(
+                level or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                "anqi:ringing-screen"
+            ).apply {
+                setReferenceCounted(false)
+                acquire(SCREEN_WAKE_MS)
+            }
+        }.onFailure { Log.e(TAG, "Unable to wake the screen", it) }
+    }
+
     private fun releaseWakeLock() {
         runCatching { if (wakeLock?.isHeld == true) wakeLock?.release() }
         wakeLock = null
+        runCatching { if (screenLock?.isHeld == true) screenLock?.release() }
+        screenLock = null
     }
 
     private val stopRunnable = Runnable {
@@ -140,6 +200,7 @@ class RingtoneService : Service() {
     companion object {
         private const val TAG = "AnqiRingtone"
         private const val AUTO_STOP_MS = 5 * 60_000L
+        private const val SCREEN_WAKE_MS = 30_000L
         const val ACTION_STOP = "com.anqi.app.action.STOP_RINGING"
 
         fun start(context: Context, alarm: Alarm) {
@@ -155,6 +216,12 @@ class RingtoneService : Service() {
 
         fun stop(context: Context) {
             context.stopService(Intent(context, RingtoneService::class.java))
+        }
+
+        /** True when the phone is in silent/vibrate mode, used to keep the UI honest. */
+        fun inSilentMode(context: Context): Boolean {
+            val audio = context.getSystemService(AudioManager::class.java)
+            return audio?.ringerMode != AudioManager.RINGER_MODE_NORMAL
         }
     }
 }

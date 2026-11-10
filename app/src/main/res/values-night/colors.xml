@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="anqi_window_bg">#0A0A0B</color>
+    <!-- Equal to DarkPalette.canvas, so the start-up frame matches the theme. -->
+    <color name="anqi_window_bg">#171210</color>
+    <color name="anqi_alarm_window_bg">#171210</color>
     <color name="anqi_icon_bg">#0A0A0B</color>
 </resources>
