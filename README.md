@@ -185,7 +185,7 @@ distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-bin.zip
 
 - `assembleRelease`：成功
 - `testDebugUnitTest`：11 个规则测试 + 7 个日历投影测试 + 9 个 Robolectric/Compose 界面测试，0 失败
-- 电脑端真实 Compose 渲染：360dp 所有/年/月/周/关于、411dp 编辑器、840dp 双栏，截图见 `anqi/preview/`
+- 电脑端真实 Compose 渲染：360dp 所有/年/月/周/关于、411dp 编辑器、840dp 双栏，截图见 `preview/`
 - `lintDebug`：0 errors，9 warnings（依赖版本、adaptive icon monochrome 等）
 - APK：`zipalign` 通过，APK Signature Scheme v2 验签通过
 - 包名 `com.anqi.app`、应用名「月度闹钟」、版本 1.3.0（versionCode 5）、minSdk 26 / targetSdk 36 已用 `aapt2 dump badging` 核对
