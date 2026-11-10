@@ -6,12 +6,13 @@
 
 ## 下载
 
-**[⬇ 下载 anqi-1.3.0.apk](https://github.com/VanBuren-project/monthly-alarm/releases/download/v1.3.0/anqi-1.3.0.apk)** · 7.2 MB
+**[⬇ 下载 anqi-1.3.1.apk](https://github.com/VanBuren-project/monthly-alarm/releases/download/v1.3.1/anqi-1.3.1.apk)** · 7.2 MB
 
-SHA-256：`13AC136A27672201AD78B08CB92F1EA6376609FD0EFAC6C10F2E0EA839A63B26`
+SHA-256：`DCB02A17E2FE1016491BED46FE9794AED37EE7FA22AF28BA2887D833AF081A4E`
 
 也可以到 [Releases](https://github.com/VanBuren-project/monthly-alarm/releases) 页面查看更新说明与校验文件。
-当前安装包用个人侧载证书签名，适合直接安装体验；应用商店分发需要另行使用正式 keystore。
+
+> **升级提示**：1.3.0 使用的是开发调试证书，1.3.1 起改用正式发布证书。两者签名不同，Android 不允许直接覆盖安装——请先卸载 1.3.0（已设的提醒会一并清除），再安装 1.3.1。之后再升级都可以直接覆盖。
 
 ## 它解决什么问题
 
@@ -42,10 +43,10 @@ SHA-256：`13AC136A27672201AD78B08CB92F1EA6376609FD0EFAC6C10F2E0EA839A63B26`
 
 - 应用名：月度闹钟
 - 包名：`com.anqi.app`
-- 版本：1.3.0（versionCode 5）
+- 版本：1.3.1（versionCode 6）
 - 最低系统：Android 8.0（API 26）
 - 目标系统：Android 16（API 36）
-- 构建：Kotlin + Jetpack Compose + Material 3，release 构建（个人侧载签名）
+- 构建：Kotlin + Jetpack Compose + Material 3，release 构建（正式发布证书，RSA 4096 / v2 签名）
 
 ## 功能
 
@@ -118,8 +119,9 @@ SHA-256：`13AC136A27672201AD78B08CB92F1EA6376609FD0EFAC6C10F2E0EA839A63B26`
 
 ## 安装
 
-1. 从 [Releases](https://github.com/VanBuren-project/monthly-alarm/releases) 下载 `anqi-1.3.0.apk`（或使用自己构建的 `app/build/outputs/apk/release/app-release.apk`）传到手机。
-2. 在系统设置中允许文件管理器/浏览器「安装未知应用」。
+1. 从 [Releases](https://github.com/VanBuren-project/monthly-alarm/releases) 下载 `anqi-1.3.1.apk`（或使用自己构建的 `app/build/outputs/apk/release/app-release.apk`）传到手机。
+2. 如果手机上装过 1.3.0 或更早的调试证书版本，先卸载再安装（签名不同，无法覆盖）。
+3. 在系统设置中允许文件管理器/浏览器「安装未知应用」。
 3. 安装并打开「月度闹钟」。
 4. 首次进入按首页提示依次开启：
    - 通知权限
@@ -172,14 +174,33 @@ distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-bin.zip
 ## 发布到 GitHub
 
 仓库：<https://github.com/VanBuren-project/monthly-alarm>
-发布页：<https://github.com/VanBuren-project/monthly-alarm/releases/tag/v1.3.0>
+发布页：<https://github.com/VanBuren-project/monthly-alarm/releases>
 
-`v1.3.0` 的 tag、源码、APK、`RELEASE_NOTES.md` 与 `SHA256SUMS.txt` 均已发布。
-当前 release APK 使用本机 debug 证书签名，适合个人侧载与测试。如果要作为正式版本分发，建议按下面顺序补完：
+`v1.3.1` 的 tag、源码、APK、`RELEASE_NOTES.md` 与 `SHA256SUMS.txt` 已发布，APK 使用正式发布证书签名。
 
-1. 生成并离线备份正式 release keystore；在 `app/build.gradle.kts` 中用 `keystore.properties` 读取签名（该文件已在 `.gitignore` 中，不要提交）。
-2. 用正式 keystore 重新构建 `assembleRelease`，可选 `bundleRelease` 生成 AAB，并递增 `versionCode` 后发布新 tag。
-3. 若要上架 Google Play，还需隐私政策 URL、Data safety 表单、512×512 图标、1024×500 特色图和内容分级。
+### 签名与密钥
+
+- 正式密钥为 RSA 4096、有效期 100 年，使用 PKCS#12 格式的 `.jks`，别名 `monthly-alarm`。
+- `app/build.gradle.kts` 从仓库根目录的 `keystore.properties` 读取签名信息；该文件和 `*.jks` 都在 `.gitignore` 中，源码仓库里只有构建逻辑，没有任何密钥材料。
+- 自己构建时若没有 `keystore.properties`，release 构建会自动回退到 debug 证书，`assembleRelease` 仍可正常跑通。
+- **密钥一旦丢失就无法再发布可覆盖安装的更新**，请把 `.jks` 与密码离线备份至少两份（例如加密压缩包 + U 盘）。
+
+`keystore.properties` 格式：
+
+```properties
+storeFile=/absolute/path/to/monthly-alarm-release.jks
+storePassword=你的密码
+keyAlias=monthly-alarm
+keyPassword=你的密码
+```
+
+后续发版流程：
+
+1. 递增 `app/build.gradle.kts` 的 `versionCode` 与 `versionName`。
+2. 用正式 keystore 构建：`./gradlew assembleRelease`（可选 `bundleRelease` 生成 AAB）。
+3. 推送 tag 并上传 APK、`RELEASE_NOTES.md`、`SHA256SUMS.txt`。
+
+若将来上架 Google Play，还需隐私政策 URL、Data safety 表单、512×512 图标、1024×500 特色图和内容分级。
 
 ## 已验证
 
@@ -187,10 +208,10 @@ distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-bin.zip
 - `testDebugUnitTest`：11 个规则测试 + 7 个日历投影测试 + 9 个 Robolectric/Compose 界面测试，0 失败
 - 电脑端真实 Compose 渲染：360dp 所有/年/月/周/关于、411dp 编辑器、840dp 双栏，截图见 `preview/`
 - `lintDebug`：0 errors，9 warnings（依赖版本、adaptive icon monochrome 等）
-- APK：`zipalign` 通过，APK Signature Scheme v2 验签通过
-- 包名 `com.anqi.app`、应用名「月度闹钟」、版本 1.3.0（versionCode 5）、minSdk 26 / targetSdk 36 已用 `aapt2 dump badging` 核对
+- APK：`zipalign` 通过，APK Signature Scheme v2 验签通过（正式证书 `4B:0D:89:66:F9:7B:C2:1C:A1:94:F7:95:27:7C:DF:6B:AC:82:34:27:F4:F2:82:48:C2:69:93:20:3F:7C:40:A0`）
+- 包名 `com.anqi.app`、应用名「月度闹钟」、版本 1.3.1（versionCode 6）、minSdk 26 / targetSdk 36 已用 `aapt2 dump badging` 核对
 
-**未验证**：本机没有可用的硬件加速模拟器（AEHD 安装需要管理员/UAC 授权），也没有连接 Android 手机，因此尚未做真机 UI、锁屏响铃和国产 ROM 后台限制的实机验收。
+**未验证**：本机没有可用的硬件加速模拟器（AEHD 安装需要管理员/UAC 授权），也没有连接 Android 手机，因此自动化环节未覆盖真机锁屏响铃和国产 ROM 后台限制的实机验收（作者已在自用手机上手工验证 1.3.0 的日常响铃）。
 
 ## 已知限制 / 下一版
 
@@ -200,7 +221,7 @@ distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-bin.zip
 - 不支持自定义铃声选择（当前使用系统默认闹钟铃声）
 - 不支持「跳过下一次」、提醒模板、历史记录、桌面小组件、云同步/备份
 - 没有提前提醒、多个提前提醒、Wear OS
-- 个人侧载签名使用本机 debug 证书，不可直接上架应用商店；如上架需要单独生成并保管 release keystore
+- 上架应用商店需要额外准备隐私政策、商店素材，并用 AAB 提交
 - 未做 TalkBack 全量走查；已处理主要触控高度、字体缩放和窄屏溢出
 
 ## 目录
