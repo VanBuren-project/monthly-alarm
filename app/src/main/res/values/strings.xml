@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">月度闹钟</string>
+    <string name="channel_alarm_name">闹钟与提醒</string>
+    <string name="channel_alarm_desc">在设定时间响铃并显示全屏提醒</string>
+    <string name="alarm_notification_title">月度闹钟提醒</string>
+    <string name="alarm_snooze">稍后提醒</string>
+    <string name="alarm_dismiss">停止</string>
+    <string name="alarm_default_label">提醒</string>
+</resources>
