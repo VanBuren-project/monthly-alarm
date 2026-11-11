@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.anqi.app.BuildConfig
+import com.anqi.app.alarm.LaunchCheck
 import com.anqi.app.ui.theme.Anqi
 import com.anqi.app.viewmodel.AlarmViewModel
 import kotlinx.coroutines.delay
@@ -147,6 +148,9 @@ fun SettingsScreen(
                         color = Anqi.palette.signal
                     )
                 }
+
+                Spacer(Modifier.height(14.dp))
+                LaunchCheckCard(viewModel)
 
                 Spacer(Modifier.height(16.dp))
                 Surface(
@@ -557,6 +561,63 @@ private fun OemSetupCard(viewModel: AlarmViewModel) {
                     color = Anqi.palette.signal
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun LaunchCheckCard(viewModel: AlarmViewModel) {
+    val snapshot = viewModel.launchState
+    val confirmedAt = viewModel.setupConfirmedAt
+    val manual = if (snapshot == null) null else LaunchCheck.manualState(snapshot)
+    val missing = if (snapshot == null) 0 else {
+        LaunchCheck.systemItems(snapshot).count { it.state != LaunchCheck.State.CONFIRMED }
+    }
+
+    // An unread snapshot only happens before the first foreground; saying
+    // nothing is better than saying "0 项" as if it had been measured.
+    if (snapshot == null) return
+
+    val headline = LaunchCheck.summary(snapshot)
+    val tone = when {
+        missing > 0 || manual == LaunchCheck.State.NEEDS_ACTION -> Anqi.palette.signal
+        else -> Anqi.palette.muted
+    }
+    val whenText = if (confirmedAt > 0L) {
+        "上次确认：${formatStamp(confirmedAt)}"
+    } else {
+        "还没有确认过这三项"
+    }
+
+    Surface(
+        color = Anqi.palette.surface,
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(18.dp)) {
+            Text(
+                "上次检查",
+                style = MaterialTheme.typography.titleMedium,
+                color = Anqi.palette.ink
+            )
+            Spacer(Modifier.height(5.dp))
+            Text(
+                headline,
+                style = MaterialTheme.typography.bodyMedium,
+                color = tone
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                whenText,
+                style = MaterialTheme.typography.labelMedium,
+                color = Anqi.palette.muted
+            )
+            Spacer(Modifier.height(8.dp))
+            AnqiTextButton(
+                "重新检查",
+                onClick = { viewModel.showLaunchCheck() },
+                color = Anqi.palette.signal
+            )
         }
     }
 }

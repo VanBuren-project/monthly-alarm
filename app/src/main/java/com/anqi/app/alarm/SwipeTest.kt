@@ -46,6 +46,7 @@ object SwipeTest {
     private const val KEY_VERDICT_LATE = "verdict_late"
     private const val KEY_GEN = "gen"
     private const val KEY_SETUP_DONE = "setup_done"
+    private const val KEY_SETUP_CONFIRMED_AT = "setup_confirmed_at"
 
     /** How far from the armed slot a ring can land and still count as this test. */
     private const val MATCH_WINDOW_MS = 5 * 60_000L
@@ -148,8 +149,48 @@ object SwipeTest {
     /** Whether the user has walked through the three OEM steps at least once. */
     fun setupDone(context: Context): Boolean = prefs(context).getBoolean(KEY_SETUP_DONE, false)
 
+    /**
+     * When the user last claimed all three switches are on, or 0 when they never
+     * said so.
+     *
+     * Kept apart from [setupDone] because the two answer different questions:
+     * `setupDone` is "we have shown the walkthrough once, stop nagging", while
+     * this one is a timestamp that a measurement can be compared against. Only a
+     * verdict armed *after* this moment may confirm the switches, otherwise an
+     * old pass would keep a freshly-broken setup looking fine.
+     */
+    fun setupConfirmedAt(context: Context): Long = prefs(context).getLong(KEY_SETUP_CONFIRMED_AT, 0L)
+
     fun markSetupDone(context: Context) {
         prefs(context).edit { putBoolean(KEY_SETUP_DONE, true) }
+    }
+
+    /**
+     * Records "三项都打开了" and returns the moment it was recorded, so the caller
+     * can arm a measurement against it in one step.
+     *
+     * This is deliberately just the user's word. It buys no trust by itself — it
+     * only buys a slot in which the phone can prove or disprove it.
+     */
+    fun markSetupConfirmed(context: Context, now: Long = System.currentTimeMillis()): Long {
+        prefs(context).edit {
+            putBoolean(KEY_SETUP_DONE, true)
+            putLong(KEY_SETUP_CONFIRMED_AT, now)
+        }
+        return now
+    }
+
+    /**
+     * Called when a measurement proves the switches are *not* working.
+     *
+     * The confirmation is dropped but the timestamp is kept in [setupConfirmedAt]
+     * terms only as long as the failed verdict is newer than it — see
+     * [LaunchCheck.manualState], which reads a failure as NEEDS_ACTION without
+     * needing anything erased here. Kept as a separate hook so the UI can clear
+     * a stale "已确认" line the moment it knows better.
+     */
+    fun clearSetupConfirmed(context: Context) {
+        prefs(context).edit { remove(KEY_SETUP_CONFIRMED_AT) }
     }
 
     // ----------------------------------------------------------------- action

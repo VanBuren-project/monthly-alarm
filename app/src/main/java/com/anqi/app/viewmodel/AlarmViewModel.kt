@@ -19,6 +19,7 @@ import com.anqi.app.alarm.ArmLedger
 import com.anqi.app.alarm.Diag
 import com.anqi.app.alarm.GuardJob
 import com.anqi.app.alarm.GuardService
+import com.anqi.app.alarm.LaunchCheck
 import com.anqi.app.alarm.OemAutostart
 import com.anqi.app.alarm.SwipeTest
 import com.anqi.app.data.AlarmStore
@@ -58,6 +59,10 @@ class AlarmViewModel(application: Application) : AndroidViewModel(application) {
     var setupDone by mutableStateOf(SwipeTest.setupDone(application))
         private set
 
+    /** When the user last said the three switches were on; 0 when never. */
+    var setupConfirmedAt by mutableLongStateOf(SwipeTest.setupConfirmedAt(application))
+        private set
+
     /** OEM name for the copy, or null when we have no specific screen for it. */
     val oemLabel: String? = OemAutostart.label(application)
 
@@ -76,6 +81,23 @@ class AlarmViewModel(application: Application) : AndroidViewModel(application) {
     /** The last measured swipe test, or null when it was never run. */
     var swipeVerdict by mutableStateOf(SwipeTest.verdict(application))
         private set
+
+    // ------------------------------------------------------------ start check
+
+    /** The startup check's latest reading, or null before the first foreground. */
+    var launchState by mutableStateOf<LaunchCheck.Snapshot?>(null)
+        private set
+
+    /** Whether the "还差几项" dialog should be on screen. */
+    var launchDialog by mutableStateOf(false)
+        private set
+
+    /** Whether to ask "三项都打开了吗？" after the user came back from settings. */
+    var launchReturnConfirm by mutableStateOf(false)
+        private set
+
+    private var sawForeground = false
+    private var leftForSettings = false
 
     init {
         reload()
@@ -100,7 +122,12 @@ class AlarmViewModel(application: Application) : AndroidViewModel(application) {
         swipePendingAt = SwipeTest.pendingAt(getApplication())
         swipeVerdict = SwipeTest.verdict(getApplication())
         setupDone = SwipeTest.setupDone(getApplication())
+        setupConfirmedAt = SwipeTest.setupConfirmedAt(getApplication())
         batteryUnrestricted = OemAutostart.isBatteryUnrestricted(getApplication())
+        // Re-read here too, so the home banner and the settings summary follow
+        // every action that changes the picture (start/cancel a test, confirm the
+        // switches) without waiting for the next foreground.
+        launchState = launchSnapshot()
     }
 
     fun save(alarm: Alarm): Alarm {
@@ -198,6 +225,120 @@ class AlarmViewModel(application: Application) : AndroidViewModel(application) {
         setupDone = true
     }
 
+    // --------------------------------------------------------- startup prompt
+
+    /** Everything [LaunchCheck] needs, read fresh from the system. */
+    fun launchSnapshot(now: Long = System.currentTimeMillis()): LaunchCheck.Snapshot =
+        LaunchCheck.Snapshot(
+            notifications = readiness.notifications,
+            exactAlarms = readiness.exactAlarms,
+            fullScreen = readiness.fullScreen,
+            batteryUnrestricted = batteryUnrestricted,
+            confirmedAt = SwipeTest.setupConfirmedAt(getApplication()),
+            verdict = swipeVerdict,
+            pendingAt = swipePendingAt,
+            snoozedUntil = LaunchCheck.snoozedUntil(getApplication()),
+            now = now
+        )
+
+    /**
+     * Runs the check on every foreground, but only *acts* on a few of them.
+     *
+     * The popup is one shot per cold start on purpose: re-opening a dialog every
+     * time the user comes back from another app would be indistinguishable from
+     * a nag and would train them to dismiss it without reading. So the full
+     * decision is taken once, and later foregrounds only re-read the state —
+     * with two exceptions, both of which mean the situation changed under the
+     * user's feet rather than merely being unaddressed:
+     *
+     *  - they just came back from the settings screen we sent them to, so the
+     *    question "三项都打开了吗" is now answerable;
+     *  - a measurement came back as a miss, which is the app learning something
+     *    new, not repeating itself.
+     */
+    fun onForeground() {
+        refreshReadiness()
+        val snapshot = launchSnapshot()
+        launchState = snapshot
+        val first = !sawForeground
+        sawForeground = true
+
+        if (leftForSettings) {
+            leftForSettings = false
+            // Nothing left to ask when the switches are already confirmed.
+            if (LaunchCheck.manualState(snapshot) != LaunchCheck.State.CONFIRMED) {
+                launchDialog = false
+                launchReturnConfirm = true
+                return
+            }
+        }
+
+        val failed = LaunchCheck.Reason.MEASUREMENT_FAILED in LaunchCheck.reasons(snapshot)
+        launchDialog = when {
+            first -> LaunchCheck.shouldPrompt(snapshot)
+            failed -> true
+            else -> false
+        }
+    }
+
+    fun dismissLaunchDialog() {
+        launchDialog = false
+    }
+
+    /** Re-opens the check from the home banner, after a dismissal. */
+    fun showLaunchCheck() {
+        launchState = launchSnapshot()
+        launchDialog = true
+    }
+
+    /** "以后再说" — quiet for a day, unless a measurement proves otherwise. */
+    fun snoozeLaunchCheck() {
+        LaunchCheck.snooze(getApplication())
+        launchDialog = false
+        launchState = launchSnapshot()
+    }
+
+    /**
+     * Opens the one page that holds the three switches and remembers that we did,
+     * so the next foreground asks whether it worked.
+     */
+    fun openManualSwitches(): Boolean {
+        leftForSettings = true
+        return OemAutostart.openForManualSwitches(getApplication())
+    }
+
+    /** "再去看看" — reopened the page, so ask again when they come back. */
+    fun reopenManualSwitches() {
+        launchReturnConfirm = false
+        openManualSwitches()
+    }
+
+    /**
+     * The user says all three are on.
+     *
+     * Their word is recorded — but not believed. Recording it only opens a
+     * window in which the phone can prove it, by arming a real ring 60 seconds
+     * out. Until that ring lands the switches stay "待确认", and if it never
+     * lands they fall back to "需要你处理" rather than sitting on a claim nobody
+     * checked.
+     *
+     * @return the reminder used for the measurement, or null when there is
+     *   nothing enabled to ring with — the switches then stay 待确认, which is
+     *   the honest state.
+     */
+    fun confirmManualSwitches(): Alarm? {
+        LaunchCheck.clearSnooze(getApplication())
+        SwipeTest.markSetupConfirmed(getApplication())
+        launchReturnConfirm = false
+        refreshReadiness()
+        launchState = launchSnapshot()
+        return startSwipeTest()
+    }
+
+    fun dismissReturnConfirm() {
+        launchReturnConfirm = false
+    }
+
     /** Opens the OEM autostart screen, falling back to app info. */
     fun openAutostart(): Boolean = OemAutostart.open(getApplication())
 
@@ -205,7 +346,8 @@ class AlarmViewModel(application: Application) : AndroidViewModel(application) {
 
     fun openAppInfo(): Boolean = OemAutostart.openAppInfo(getApplication())
 
-    fun upcoming(limit: Int = 3): List<Pair<Alarm, java.time.ZonedDateTime>> {        val now = java.time.ZonedDateTime.now()
+    fun upcoming(limit: Int = 3): List<Pair<Alarm, java.time.ZonedDateTime>> {
+        val now = java.time.ZonedDateTime.now()
         return alarms.asSequence()
             .filter { it.enabled }
             .flatMap { alarm ->

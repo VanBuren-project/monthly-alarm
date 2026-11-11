@@ -50,12 +50,12 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.anqi.app.alarm.LaunchCheck
 import com.anqi.app.data.CalendarProjector
 import com.anqi.app.data.NextOccurrence
 import com.anqi.app.model.Alarm
 import com.anqi.app.ui.theme.Anqi
 import com.anqi.app.viewmodel.AlarmViewModel
-import com.anqi.app.viewmodel.SystemReadiness
 import kotlinx.coroutines.delay
 import java.time.LocalDate
 import java.time.YearMonth
@@ -200,12 +200,17 @@ fun AnqiRoot(
         showSettings = true
     }
 
+    val launchState = viewModel.launchState
+    val setupStrip = launchState?.let { setupHint(it, viewModel.oemLabel) }
+
     val mainTabs: @Composable (Modifier, Boolean) -> Unit = { mainModifier, isCompact ->
         MainTabs(
             modifier = mainModifier,
             alarms = alarms,
             now = now,
-            readiness = viewModel.readiness,            tab = tab,
+            setupHint = setupStrip,
+            onOpenSetup = { viewModel.showLaunchCheck() },
+            tab = tab,
             focusDate = focusDate,
             monthAnchor = monthAnchor,
             yearAnchor = yearAnchor,
@@ -230,9 +235,6 @@ fun AnqiRoot(
             onSelectDate = { focusDate = it },
             onWeekChange = changeWeek,
             onToday = goToday,
-            onRequestNotifications = onRequestNotifications,
-            onOpenExactAlarmSettings = onOpenExactAlarmSettings,
-            onOpenFullScreenSettings = onOpenFullScreenSettings,
             swipeFailed = viewModel.swipeVerdict?.let { !it.rang } == true,
             swipeLate = viewModel.swipeVerdict?.late == true,
             missedCount = viewModel.missedCount,
@@ -330,6 +332,42 @@ fun AnqiRoot(
             }
         )
     }
+
+    val checkState = viewModel.launchState
+    if (viewModel.launchDialog && checkState != null) {
+        OemCheckDialog(
+            snapshot = checkState,
+            oemLabel = viewModel.oemLabel,
+            onFixSystem = { item ->
+                when (item) {
+                    LaunchCheck.Item.NOTIFICATIONS -> onRequestNotifications()
+                    LaunchCheck.Item.EXACT_ALARM -> onOpenExactAlarmSettings()
+                    LaunchCheck.Item.FULL_SCREEN -> onOpenFullScreenSettings()
+                    LaunchCheck.Item.BATTERY -> onOpenBatterySettings()
+                    else -> Unit
+                }
+                viewModel.dismissLaunchDialog()
+            },
+            onOpenSwitches = {
+                viewModel.openManualSwitches()
+                viewModel.dismissLaunchDialog()
+            },
+            onOpenDetails = {
+                viewModel.dismissLaunchDialog()
+                openSettings()
+            },
+            onSnooze = { viewModel.snoozeLaunchCheck() },
+            onDismiss = { viewModel.dismissLaunchDialog() }
+        )
+    }
+
+    if (viewModel.launchReturnConfirm) {
+        OemConfirmDialog(
+            onConfirmed = { viewModel.confirmManualSwitches() },
+            onLookAgain = { viewModel.reopenManualSwitches() },
+            onDismiss = { viewModel.dismissReturnConfirm() }
+        )
+    }
 }
 
 @Composable
@@ -379,7 +417,8 @@ fun HomePane(
     alarms: List<Alarm>,
     upcoming: List<Pair<Alarm, ZonedDateTime>>,
     now: ZonedDateTime,
-    readiness: SystemReadiness,
+    setupHint: SetupHint?,
+    onOpenSetup: () -> Unit,
     compact: Boolean,
     selecting: Boolean,
     selectedIds: Set<Long>,
@@ -392,9 +431,6 @@ fun HomePane(
     onRequestDelete: () -> Unit,
     onSelectAll: () -> Unit,
     onOpenSettings: () -> Unit,
-    onRequestNotifications: () -> Unit,
-    onOpenExactAlarmSettings: () -> Unit,
-    onOpenFullScreenSettings: () -> Unit,
     swipeFailed: Boolean = false,
     swipeLate: Boolean = false,
     missedCount: Int = 0,
@@ -541,14 +577,9 @@ fun HomePane(
                     }
                 }
 
-                if (!readiness.allGood) {
+                if (setupHint != null) {
                     Spacer(Modifier.height(16.dp))
-                    ReadinessBanner(
-                        readiness = readiness,
-                        onRequestNotifications = onRequestNotifications,
-                        onOpenExactAlarmSettings = onOpenExactAlarmSettings,
-                        onOpenFullScreenSettings = onOpenFullScreenSettings
-                    )
+                    SetupBanner(hint = setupHint, onOpen = onOpenSetup)
                 }
 
                 // A measured failure outranks a missing permission: the user's
@@ -759,49 +790,6 @@ private fun AlarmRow(
                     uncheckedBorderColor = Anqi.palette.line
                 )
             )
-        }
-    }
-}
-
-@Composable
-private fun ReadinessBanner(
-    readiness: SystemReadiness,
-    onRequestNotifications: () -> Unit,
-    onOpenExactAlarmSettings: () -> Unit,
-    onOpenFullScreenSettings: () -> Unit
-) {
-    val missing = when {
-        !readiness.notifications -> "通知权限未开启"
-        !readiness.exactAlarms -> "精确闹钟权限未开启"
-        else -> "全屏提醒权限未开启"
-    }
-    val action = when {
-        !readiness.notifications -> onRequestNotifications
-        !readiness.exactAlarms -> onOpenExactAlarmSettings
-        else -> onOpenFullScreenSettings
-    }
-    Surface(
-        color = Anqi.palette.signalSoft,
-        shape = RoundedCornerShape(20.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "还差一步",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Anqi.palette.ink
-                )
-                Text(
-                    missing,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Anqi.palette.muted
-                )
-            }
-            AnqiTextButton("去开启", onClick = action, color = Anqi.palette.signal)
         }
     }
 }

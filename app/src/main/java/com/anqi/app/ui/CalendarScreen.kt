@@ -61,7 +61,6 @@ import com.anqi.app.data.CalendarProjector
 import com.anqi.app.data.NextOccurrence
 import com.anqi.app.model.Alarm
 import com.anqi.app.ui.theme.Anqi
-import com.anqi.app.viewmodel.SystemReadiness
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZonedDateTime
@@ -83,7 +82,8 @@ fun MainTabs(
     modifier: Modifier,
     alarms: List<Alarm>,
     now: ZonedDateTime,
-    readiness: SystemReadiness,
+    setupHint: SetupHint?,
+    onOpenSetup: () -> Unit,
     tab: CalendarTab,
     focusDate: LocalDate,
     monthAnchor: YearMonth,
@@ -109,9 +109,6 @@ fun MainTabs(
     onSelectDate: (LocalDate) -> Unit,
     onWeekChange: (LocalDate) -> Unit,
     onToday: () -> Unit,
-    onRequestNotifications: () -> Unit,
-    onOpenExactAlarmSettings: () -> Unit,
-    onOpenFullScreenSettings: () -> Unit,
     swipeFailed: Boolean = false,
     swipeLate: Boolean = false,
     missedCount: Int = 0,
@@ -125,7 +122,8 @@ fun MainTabs(
                     alarms = alarms,
                     upcoming = upcoming(alarms, now),
                     now = now,
-                    readiness = readiness,
+                    setupHint = setupHint,
+                    onOpenSetup = onOpenSetup,
                     compact = compact,
                     selecting = selecting,
                     selectedIds = selectedIds,
@@ -138,9 +136,6 @@ fun MainTabs(
                     onRequestDelete = onRequestDelete,
                     onSelectAll = onSelectAll,
                     onOpenSettings = onOpenSettings,
-                    onRequestNotifications = onRequestNotifications,
-                    onOpenExactAlarmSettings = onOpenExactAlarmSettings,
-                    onOpenFullScreenSettings = onOpenFullScreenSettings,
                     swipeFailed = swipeFailed,
                     swipeLate = swipeLate,
                     missedCount = missedCount,

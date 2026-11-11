@@ -131,6 +131,8 @@ class MainActivity : ComponentActivity() {
         // find out whether anything was silently skipped.
         val late = SelfHeal.heal(this, ensureGuard = true)
         if (late > 0) viewModel.refreshDiag()
-        viewModel.refreshReadiness()
+        // Last, so the startup check reads the state SelfHeal just repaired and a
+        // freshly settled swipe test is already visible to it.
+        viewModel.onForeground()
     }
 }

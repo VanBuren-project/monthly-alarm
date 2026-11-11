@@ -158,6 +158,62 @@ object OemAutostart {
         return openAppInfo(context)
     }
 
+    /**
+     * One jump that covers all three switches on the phones where they share a
+     * page — which is exactly the Xiaomi case that matters here.
+     *
+     * MIUI/HyperOS puts 自启动、锁屏显示 and 后台弹出界面 on the same
+     * "应用权限" screen, reachable with a documented-ish explicit intent and an
+     * `extra_pkgname` extra. Sending the user there beats three separate jumps:
+     * every switch they need is on one page, and there is no way to lose them in
+     * between. This is still just an ordinary `startActivity` into another app's
+     * exported activity — no reflection, and it returns nothing about state.
+     *
+     * @return true when a permission editor opened, false when this ROM has no
+     *   such screen and the caller should fall back to [open].
+     */
+    fun openPermissionEditor(context: Context): Boolean {
+        val intent = Intent("miui.intent.action.APP_PERM_EDITOR").apply {
+            setClassName(
+                "com.miui.securitycenter",
+                "com.miui.permcenter.permissions.PermissionsEditorActivity"
+            )
+            putExtra("extra_pkgname", context.packageName)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        if (runCatching { context.startActivity(intent) }.isSuccess) {
+            Diag.log(context, "OEM 打开权限编辑页", "com.miui.permcenter.permissions.PermissionsEditorActivity")
+            return true
+        }
+        // MIUI V7 kept the same screen under a different class name.
+        val legacy = Intent(intent).setClassName(
+            "com.miui.securitycenter",
+            "com.miui.permcenter.permissions.AppPermissionsEditorActivity"
+        )
+        if (runCatching { context.startActivity(legacy) }.isSuccess) {
+            Diag.log(context, "OEM 打开权限编辑页", "com.miui.permcenter.permissions.AppPermissionsEditorActivity")
+            return true
+        }
+        Log.d(TAG, "No MIUI permission editor on this build")
+        return false
+    }
+
+    /**
+     * The best single jump for "打开这三项", whichever ROM this is.
+     *
+     * On Xiaomi that is one permission page covering everything. Elsewhere there
+     * is no such page, so this opens the autostart list and the caller's copy
+     * says the other two live under 应用信息. Falls back to the app-info page,
+     * which on MIUI is the same neighbourhood anyway.
+     */
+    fun openForManualSwitches(context: Context): Boolean {
+        val keys = setOf(Build.MANUFACTURER.orEmpty().lowercase(), Build.BRAND.orEmpty().lowercase())
+        if (keys.any { it in setOf("xiaomi", "redmi", "poco") } && openPermissionEditor(context)) {
+            return true
+        }
+        return open(context)
+    }
+
     /** Battery-optimisation list, then app info if even that is unavailable. */
     fun openBattery(context: Context): Boolean {
         val opened = runCatching {

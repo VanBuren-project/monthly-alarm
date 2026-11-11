@@ -107,3 +107,9 @@ fun timeUntil(target: ZonedDateTime, now: ZonedDateTime = ZonedDateTime.now()): 
 
 fun nowDateTimeText(): String =
     LocalDateTime.now().format(DateTimeFormatter.ofPattern("M月d日 EEEE", Locale.CHINA))
+
+/** A past instant as "11月8日 21:04", for the "上次检查" row. */
+fun formatStamp(epochMillis: Long): String =
+    java.time.Instant.ofEpochMilli(epochMillis)
+        .atZone(java.time.ZoneId.systemDefault())
+        .format(DateTimeFormatter.ofPattern("M月d日 HH:mm", Locale.CHINA))

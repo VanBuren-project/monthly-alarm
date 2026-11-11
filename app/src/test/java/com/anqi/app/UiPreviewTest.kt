@@ -4,22 +4,33 @@ import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.anqi.app.alarm.LaunchCheck
 import com.anqi.app.data.AlarmStore
 import com.anqi.app.model.Alarm
 import com.anqi.app.model.RepeatType
 import com.anqi.app.ui.AnqiRoot
+import com.anqi.app.ui.OemCheckDialog
+import com.anqi.app.ui.OemConfirmDialog
 import com.anqi.app.ui.RingingScreen
+import com.anqi.app.ui.SetupBanner
+import com.anqi.app.ui.setupHint
 import com.anqi.app.ui.theme.AnqiTheme
 import com.anqi.app.viewmodel.AlarmViewModel
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -27,6 +38,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowDialog
 import java.io.File
 import java.time.LocalDate
 import java.time.ZonedDateTime
@@ -85,9 +97,16 @@ class UiPreviewTest {
         )
     }
 
+    /**
+     * A Compose `Dialog` draws into its own window, so the activity's decor view
+     * is blank behind it. Capture whichever window actually holds the pixels.
+     */
     private fun capture(name: String) {
         val dir = File("build/screens").apply { mkdirs() }
-        val view = compose.activity.window.decorView
+        val dialog = ShadowDialog.getLatestDialog()
+        val dialogView = dialog?.takeIf { it.isShowing }?.window?.decorView
+        val view = dialogView?.takeIf { it.width > 0 && it.height > 0 }
+            ?: compose.activity.window.decorView
         val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
         view.draw(Canvas(bitmap))
         File(dir, "$name.png").outputStream().use {
@@ -326,8 +345,123 @@ class UiPreviewTest {
         capture("settings-test-360")
     }
 
-    private fun alarmForRinging() = Alarm(
-        id = 7L,
+    /**
+     * The startup check is the screen that decides whether the user trusts this
+     * app's own alarms, so its wording is the feature: it must never print a
+     * switch as "已开启", because nothing on the platform will tell us that.
+     */
+    @Test
+    @Config(qualifiers = "w360dp-h800dp-xhdpi")
+    fun launchCheckDialog() {
+        val snapshot = LaunchCheck.Snapshot(
+            notifications = true,
+            exactAlarms = true,
+            fullScreen = true,
+            batteryUnrestricted = false,
+            confirmedAt = 0L,
+            now = System.currentTimeMillis()
+        )
+        compose.setContent {
+            AnqiTheme(darkTheme = true) {
+                OemCheckDialog(
+                    snapshot = snapshot,
+                    oemLabel = "小米 / 红米",
+                    onFixSystem = {},
+                    onOpenSwitches = {},
+                    onOpenDetails = {},
+                    onSnooze = {},
+                    onDismiss = {}
+                )
+            }
+        }
+        compose.waitForIdle()
+
+        assertTrue(
+            compose.onAllNodesWithText("先确认这几项", substring = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        )
+        // The two groups are named by who knows the answer, not by severity.
+        assertTrue(
+            compose.onAllNodesWithText("系统能自己确认").fetchSemanticsNodes().isNotEmpty()
+        )
+        assertTrue(
+            compose.onAllNodesWithText("需要你手动打开的").fetchSemanticsNodes().isNotEmpty()
+        )
+        assertTrue(
+            compose.onAllNodesWithText("允许自启动").fetchSemanticsNodes().isNotEmpty()
+        )
+        // The state lives in the row's mark, which is a glyph plus a content
+        // description — and it must be the honest one, never "已开启". This
+        // snapshot leaves battery unrestricted = false, so it is one system row
+        // plus the three manual ones.
+        assertEquals(
+            4,
+            compose.onAllNodesWithContentDescription("需要你处理").fetchSemanticsNodes().size
+        )
+        assertTrue(
+            compose.onAllNodesWithContentDescription("已开启").fetchSemanticsNodes().isEmpty()
+        )
+        assertTrue(
+            compose.onAllNodesWithText("已开启").fetchSemanticsNodes().isEmpty()
+        )
+        capture("launch-check-360")
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h800dp-xhdpi")
+    fun launchConfirmDialog() {
+        compose.setContent {
+            AnqiTheme(darkTheme = true) {
+                OemConfirmDialog(onConfirmed = {}, onLookAgain = {}, onDismiss = {})
+            }
+        }
+        compose.waitForIdle()
+
+        assertTrue(
+            compose.onAllNodesWithText("三项都打开了吗？").fetchSemanticsNodes().isNotEmpty()
+        )
+        // The dialog has to say that "都开了" starts a test, not ends the check.
+        assertTrue(
+            compose.onAllNodesWithText("一分钟后响一次", substring = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        )
+        assertTrue(compose.onAllNodesWithText("都开了").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(compose.onAllNodesWithText("再去看看").fetchSemanticsNodes().isNotEmpty())
+        capture("launch-confirm-360")
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h800dp-xhdpi")
+    fun setupBanner() {
+        val hint = setupHint(
+            LaunchCheck.Snapshot(
+                notifications = true,
+                exactAlarms = true,
+                fullScreen = true,
+                batteryUnrestricted = true,
+                confirmedAt = 0L,
+                now = System.currentTimeMillis()
+            ),
+            oemLabel = "小米 / 红米"
+        )
+        assertTrue("a phone that was never set up must get a strip", hint != null)
+        compose.setContent {
+            AnqiTheme(darkTheme = true) {
+                Box(Modifier.padding(20.dp)) {
+                    SetupBanner(hint = hint!!, onOpen = {})
+                }
+            }
+        }
+        compose.waitForIdle()
+
+        assertTrue(
+            compose.onAllNodesWithText("还有三项开关没打开").fetchSemanticsNodes().isNotEmpty()
+        )
+        assertTrue(compose.onAllNodesWithText("去打开").fetchSemanticsNodes().isNotEmpty())
+        capture("setup-banner-360")
+    }
+
+    private fun alarmForRinging() = Alarm(        id = 7L,
         label = "交电费",
         note = "这个月有 7 折优惠，记得先在 App 里领券再交。",
         repeatType = RepeatType.MONTHLY_DAY,
