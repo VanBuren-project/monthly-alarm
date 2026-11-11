@@ -10,7 +10,7 @@
 
 SHA-256：`BED7B94093CAB0189C19BF3251DB8C243BFBB2A5CDFF62B358D81108B9836700`
 
-> 1.3.3、1.3.4、1.3.5、1.3.6 与 1.3.7 已构建完成、等待真机验证，验证通过后再发布。改动说明见仓库根目录的 `release-notes-1.3.3.md`、`release-notes-1.3.4.md`、`release-notes-1.3.5.md`、`release-notes-1.3.6.md` 与 `release-notes-1.3.7.md`。
+> 1.3.3 至 1.3.8 已构建完成、等待真机验证，验证通过后再发布。改动说明见仓库根目录的 `release-notes-1.3.3.md`、`release-notes-1.3.4.md`、`release-notes-1.3.5.md`、`release-notes-1.3.6.md`、`release-notes-1.3.7.md` 与 `release-notes-1.3.8.md`。
 
 也可以到 [Releases](https://github.com/VanBuren-project/monthly-alarm/releases) 页面查看更新说明与校验文件。
 
@@ -45,7 +45,7 @@ SHA-256：`BED7B94093CAB0189C19BF3251DB8C243BFBB2A5CDFF62B358D81108B9836700`
 
 - 应用名：月度闹钟
 - 包名：`com.anqi.app`
-- 版本：1.3.7（versionCode 12）
+- 版本：1.3.8（versionCode 13）
 - 最低系统：Android 8.0（API 26）
 - 目标系统：Android 16（API 36）
 - 构建：Kotlin + Jetpack Compose + Material 3，release 构建（正式发布证书，RSA 4096 / v2 签名）
@@ -91,11 +91,7 @@ SHA-256：`BED7B94093CAB0189C19BF3251DB8C243BFBB2A5CDFF62B358D81108B9836700`
 - **全屏提醒有独立 PendingIntent**：全屏提醒与点通知用不同 action 和 requestCode，否则系统会按同一请求去重，全屏提醒会退化成普通通知
 - **解锁即到前台**：响铃期间注册一次 `ACTION_USER_PRESENT` 广播（平时不监听），解锁瞬间主动拉起响铃页
 - **打开应用落到响铃页**：正在响铃时点图标直接进关闭页，由 ring token 判断，贪睡后再次响铃同样生效
-- **运行记录**：设置页底部是本机响铃流水账（进程启动、排闹钟成功/失败、系统直接唤起服务、重复投递合并、心跳、作业校检、补响、关闭），最多 240 行，可随时清空
-- **设置页引导**：省电白名单、自启动、最近任务锁定三件事的说明与一键跳转，另有「10 秒后响铃」用于真机自测，不改动任何提醒时间
-- **60 秒实测：真的能响吗**：设置页「清后台还响不响」会用一个真实提醒排一次一分钟后的响铃，然后请用户把应用从最近任务划掉。铃声到达时比对进程代号——只有进程真的死过一次，才说明是系统自己把服务/广播拉起来的，也就是「清后台也响」；进程没死就只算「响了，但这次没测到清后台」。四种结果（通过 / 响了但没测到 / 响了但迟了很久 / 没响）分别给不同建议，不把「迟到」当成「通过」
-- **实测不靠猜**：国产 ROM 的自启动开关没有公开 API 可读，因此本应用不谎称读到状态，只用实测反推；试响和实测使用互不干扰的两个 `PendingIntent` 身份，取消其中一个不会顺手取消另一个；排期后超过半小时仍未回到前台的实测会被遗忘而不是判成失败，避免几周前的旧档期变成永久告警
-- **漏响会在首页自己冒出来**：实测没通过、实测迟到、或记账发现某次到点没响，首页顶部会出现一条横幅，直接给「去设置自启动」的按钮
+- **设置页引导**：省电白名单、自启动、最近任务锁定三件事的说明与一键跳转
 - **启动自检**：每次打开应用先看一眼那三项开关。分三类说——系统能自己读的四项（通知、精确闹钟、全屏提醒、省电无限制）直接读真实状态；三项 OEM 开关读不到，只能在用户说「都开了」之后立刻排一次真实的 60 秒实测来验收，响了才算确认；界面因此只有「已确认 / 待确认 / 需要你处理」三个词，**永远不会显示「已开启」**。点「以后再说」二十四小时内不再主动弹（落盘，跨进程有效），但实测没过会无视这个期限立刻再弹。只有在你确认之后才排的实测才算数，三个月前的通过记录不会替今天的关闭作证。设置页多一行「上次检查」可随时重新叫出
 
 ### 日历视图
@@ -131,7 +127,7 @@ SHA-256：`BED7B94093CAB0189C19BF3251DB8C243BFBB2A5CDFF62B358D81108B9836700`
 - [周视图 360dp](preview/week-360.png)
 - [周视图含提醒块](preview/week-event-360.png)
 - [关于与声明 360dp](preview/about-360.png)
-- [设置 360dp（权限与保活引导）](preview/settings-360.png)、[设置 360dp（试一次）](preview/settings-test-360.png)、[设置 360dp（清后台实测）](preview/settings-swipe-360.png)、[设置 360dp（三步设置）](preview/settings-oem-360.png)、[设置 360dp（运行记录）](preview/settings-diag-360.png)
+- [设置 360dp（权限与保活引导）](preview/settings-360.png)、[设置 360dp（三步设置）](preview/settings-oem-360.png)
 - [启动自检清单 360dp](preview/launch-check-360.png)、[三项确认 360dp](preview/launch-confirm-360.png)、[首页横幅 360dp](preview/setup-banner-360.png)
 - [响铃页 360dp（深色）](preview/ringing-dark-360.png)、[响铃页 360dp（浅色）](preview/ringing-light-360.png)
 
@@ -158,14 +154,7 @@ SHA-256：`BED7B94093CAB0189C19BF3251DB8C243BFBB2A5CDFF62B358D81108B9836700`
 
 ### 第一次测试
 
-先做设置页的「60 秒实测」：排期后立刻把应用从最近任务划掉，等它响。结果会直接写在卡片上——
-
-- **通过**（进程被杀，仍由系统唤起）：这一步就已经过了，可以放心用
-- **响了，但这次没测到清后台**：铃声来了，但没检测到进程冷启动，说明划掉的动作没生效或进程没真被杀，重新测一次
-- **响了，但迟了很久**：系统把提醒压住了，去把省电策略改成「无限制」再测
-- **没响**：多半是自启动没允许，按卡片上的按钮去打开
-
-然后再点「10 秒后响铃」验证整条链路，并新建一个「单次」提醒设为 2–3 分钟后，锁屏等待。检查：
+新建一个「单次」提醒，设为 2–3 分钟后，锁屏等待。检查：
 
 - 是否准时全屏亮起
 - 锁屏状态下能否直接点「停止」或「贪睡」，无需先解锁
@@ -175,6 +164,8 @@ SHA-256：`BED7B94093CAB0189C19BF3251DB8C243BFBB2A5CDFF62B358D81108B9836700`
 - 音量键是否能贪睡
 - 从最近任务里划掉应用后，提醒是否仍然响
 - 重启手机后提醒是否还在
+
+至于「清后台之后到底还响不响」，不需要你自己去测——启动自检里那句「都开了」之后排的那一分钟实测，就是这件事的答案。
 
 ## 构建
 
@@ -213,7 +204,7 @@ distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-bin.zip
 仓库：<https://github.com/VanBuren-project/monthly-alarm>
 发布页：<https://github.com/VanBuren-project/monthly-alarm/releases>
 
-`v1.3.2` 已发布并保持不变。`v1.3.3`、`v1.3.4`、`v1.3.5`、`v1.3.6` 与 `v1.3.7` 的源码、APK、`RELEASE_NOTES.md` 与 `SHA256SUMS.txt` 将在真机验证通过后发布。所有 APK 使用正式发布证书签名。
+`v1.3.2` 已发布并保持不变。`v1.3.3` 至 `v1.3.8` 的源码、APK、`RELEASE_NOTES.md` 与 `SHA256SUMS.txt` 将在真机验证通过后发布。所有 APK 使用正式发布证书签名。
 
 ### 签名与密钥
 
@@ -242,13 +233,13 @@ keyPassword=你的密码
 ## 已验证
 
 - `assembleRelease`：成功
-- `testDebugUnitTest`：11 个调度/双层登记测试 + 11 个规则测试 + 7 个补响测试 + 6 个系统直接投递测试 + 6 个编辑器保存测试 + 7 个日历投影测试 + 10 个响铃恢复测试 + 6 个自愈测试 + 15 个划除实测测试 + 13 个 OEM 入口测试 + 7 个实测排期身份隔离测试 + 23 个启动自检测试 + 19 个 Robolectric/Compose 界面测试，共 141 个，0 失败
-- 电脑端真实 Compose 渲染：360dp 所有/年/月/周/设置（含「上次检查」「清后台还响不响」「三步就好」与运行记录）/启动自检清单/三项确认/首页横幅/响铃页、411dp 编辑器、840dp 双栏，截图见 `preview/`
+- `testDebugUnitTest`：11 个调度/双层登记测试 + 11 个规则测试 + 7 个补响测试 + 6 个系统直接投递测试 + 6 个编辑器保存测试 + 7 个日历投影测试 + 10 个响铃恢复测试 + 6 个自愈测试 + 15 个划除实测测试 + 13 个 OEM 入口测试 + 7 个实测排期身份隔离测试 + 23 个启动自检测试 + 16 个 Robolectric/Compose 界面测试，共 138 个，0 失败
+- 电脑端真实 Compose 渲染：360dp 所有/年/月/周/设置（含「上次检查」与「三步就好」）/启动自检清单/三项确认/首页横幅/响铃页、411dp 编辑器、840dp 双栏，截图见 `preview/`
 - `lintDebug`：0 errors，6 warnings（4 条依赖版本、2 条 adaptive icon monochrome）
 - APK：`zipalign` 通过，APK Signature Scheme v2 验签通过（正式证书 `4B:0D:89:66:F9:7B:C2:1C:A1:94:F7:95:27:7C:DF:6B:AC:82:34:27:F4:F2:82:48:C2:69:93:20:3F:7C:40:A0`）
-- 包名 `com.anqi.app`、应用名「月度闹钟」、版本 1.3.7（versionCode 12）、minSdk 26 / targetSdk 36 已用 `aapt2 dump badging` 核对；`SCHEDULED_FIRE`、`getForegroundService`、`showOnLockScreen`、`checkBeforeSave`、`SWIPE 实测已过期`、`三步就好`、`com.miui.securitycenter`、`miui.intent.action.APP_PERM_EDITOR`、`extra_pkgname`、`anqi_launch` 已在 APK 的 manifest 与 dex 中确认存在
+- 包名 `com.anqi.app`、应用名「月度闹钟」、版本 1.3.8（versionCode 13）、minSdk 26 / targetSdk 36 已用 `aapt2 dump badging` 核对；`SCHEDULED_FIRE`、`getForegroundService`、`showOnLockScreen`、`checkBeforeSave`、`SWIPE 实测已过期`、`三步就好`、`com.miui.securitycenter`、`miui.intent.action.APP_PERM_EDITOR`、`extra_pkgname`、`anqi_launch` 已在 APK 的 manifest 与 dex 中确认存在
 
-**未验证**：本机没有可用的硬件加速模拟器（AEHD 安装需要管理员/UAC 授权），也没有连接 Android 手机，因此自动化环节未覆盖真机锁屏响铃和国产 ROM 后台限制的实机验收（作者已在自用手机上手工验证 1.3.0 的日常响铃）。1.3.7 的启动自检状态机、弹窗抑制策略、实测验收闭环、小米权限编辑页深链均有单元测试覆盖，但「清后台后是否仍响」只能由手机上的 60 秒实测回答——启动自检和设置页的「清后台还响不响」就是为此准备的。
+**未验证**：本机没有可用的硬件加速模拟器（AEHD 安装需要管理员/UAC 授权），也没有连接 Android 手机，因此自动化环节未覆盖真机锁屏响铃和国产 ROM 后台限制的实机验收（作者已在自用手机上手工验证 1.3.0 的日常响铃）。启动自检状态机、弹窗抑制策略、实测验收闭环、小米权限编辑页深链均有单元测试覆盖，但「清后台后是否仍响」只能由手机上的 60 秒实测回答——启动自检里那句「都开了」之后排的一次实测就是为此准备的。
 
 ## 已知限制 / 下一版
 

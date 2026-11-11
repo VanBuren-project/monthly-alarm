@@ -108,11 +108,7 @@ fun MainTabs(
     onMonthChange: (YearMonth) -> Unit,
     onSelectDate: (LocalDate) -> Unit,
     onWeekChange: (LocalDate) -> Unit,
-    onToday: () -> Unit,
-    swipeFailed: Boolean = false,
-    swipeLate: Boolean = false,
-    missedCount: Int = 0,
-    onOpenAutostart: () -> Unit = {}
+    onToday: () -> Unit
 ) {
     Column(modifier.fillMaxSize()) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -136,10 +132,6 @@ fun MainTabs(
                     onRequestDelete = onRequestDelete,
                     onSelectAll = onSelectAll,
                     onOpenSettings = onOpenSettings,
-                    swipeFailed = swipeFailed,
-                    swipeLate = swipeLate,
-                    missedCount = missedCount,
-                    onOpenAutostart = onOpenAutostart,
                     navigationPadding = false
                 )
 

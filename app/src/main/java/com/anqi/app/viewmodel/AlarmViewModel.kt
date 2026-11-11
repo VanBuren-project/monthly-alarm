@@ -48,13 +48,6 @@ class AlarmViewModel(application: Application) : AndroidViewModel(application) {
     var guardEnabled by mutableStateOf(GuardService.isWanted(application))
         private set
 
-    /** How many reminders we armed and the system then silently dropped. */
-    var missedCount by mutableIntStateOf(ArmLedger.missedCount(application))
-        private set
-
-    var diagLines by mutableStateOf(Diag.read(application).reversed())
-        private set
-
     /** Whether the OEM autostart / recents-lock walkthrough has been seen. */
     var setupDone by mutableStateOf(SwipeTest.setupDone(application))
         private set
@@ -117,7 +110,6 @@ class AlarmViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshReadiness() {
         readiness = checkReadiness()
-        missedCount = ArmLedger.missedCount(getApplication())
         swipePending = SwipeTest.isPending(getApplication())
         swipePendingAt = SwipeTest.pendingAt(getApplication())
         swipeVerdict = SwipeTest.verdict(getApplication())
@@ -174,32 +166,6 @@ class AlarmViewModel(application: Application) : AndroidViewModel(application) {
         guardEnabled = GuardService.isWanted(context)
     }
 
-    /** Pulls the newest log lines after something happened that wrote to them. */
-    fun refreshDiag() {
-        diagLines = Diag.read(getApplication()).reversed()
-        missedCount = ArmLedger.missedCount(getApplication())
-    }
-
-    fun clearDiag() {
-        val context = getApplication<Application>()
-        Diag.clear(context)
-        ArmLedger.resetMissed(context)
-        refreshDiag()
-    }
-
-    /**
-     * Rings the first enabled reminder ten seconds from now without touching
-     * its schedule. Returns the reminder used, or null when there is nothing to
-     * test with — the settings screen turns that into a readable hint.
-     */
-    fun scheduleTestRing(): Alarm? {
-        val target = alarms.firstOrNull { it.enabled } ?: return null
-        scheduler.scheduleTestRing(target)
-        Diag.log(getApplication(), "TEST 已排期 10 秒后", "#${target.id}")
-        refreshDiag()
-        return target
-    }
-
     /**
      * Arms the swipe test against the first enabled reminder.
      *
@@ -210,14 +176,7 @@ class AlarmViewModel(application: Application) : AndroidViewModel(application) {
         val target = alarms.firstOrNull { it.enabled } ?: return null
         if (!SwipeTest.start(getApplication(), target.id)) return null
         refreshReadiness()
-        refreshDiag()
         return target
-    }
-
-    fun cancelSwipeTest() {
-        SwipeTest.cancel(getApplication())
-        refreshReadiness()
-        refreshDiag()
     }
 
     fun markSetupDone() {

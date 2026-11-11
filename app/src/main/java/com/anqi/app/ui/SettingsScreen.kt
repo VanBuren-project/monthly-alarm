@@ -26,24 +26,19 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.anqi.app.BuildConfig
 import com.anqi.app.alarm.LaunchCheck
 import com.anqi.app.ui.theme.Anqi
 import com.anqi.app.viewmodel.AlarmViewModel
-import kotlinx.coroutines.delay
 
 @Composable
 fun SettingsScreen(
@@ -57,7 +52,6 @@ fun SettingsScreen(
 ) {
     val readiness = viewModel.readiness
     var showAbout by remember { mutableStateOf(false) }
-    var testHint by remember { mutableStateOf<String?>(null) }
     BackHandler(enabled = showAbout) { showAbout = false }
     if (showAbout) {
         AboutScreen(onBack = { showAbout = false })
@@ -180,11 +174,6 @@ fun SettingsScreen(
                 }
 
                 Spacer(Modifier.height(32.dp))
-                SectionLabel("清后台还响不响")
-                Spacer(Modifier.height(10.dp))
-                SwipeTestCard(viewModel)
-
-                Spacer(Modifier.height(32.dp))
                 SectionLabel("别让系统清掉它")
                 Spacer(Modifier.height(10.dp))
                 OemSetupCard(viewModel)
@@ -260,106 +249,6 @@ fun SettingsScreen(
                     color = Anqi.palette.muted
                 )
 
-                Spacer(Modifier.height(12.dp))
-                Surface(
-                    color = Anqi.palette.raised,
-                    shape = RoundedCornerShape(20.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(Modifier.padding(18.dp)) {
-                        Text(
-                            "试一次",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Anqi.palette.ink
-                        )
-                        Spacer(Modifier.height(5.dp))
-                        Text(
-                            "十秒后响一次，不会改动任何闹钟的时间。响铃后把应用从后台清掉，再看它是否还响——这比等下个月更省事。",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Anqi.palette.muted
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        AnqiTextButton(
-                            "10 秒后响铃",
-                            onClick = {
-                                val target = viewModel.scheduleTestRing()
-                                testHint = if (target == null) {
-                                    "还没有开启的提醒，先新建一个再测。"
-                                } else {
-                                    "「${target.label.ifBlank { "提醒" }}」将在 10 秒后响铃。"
-                                }
-                            },
-                            color = Anqi.palette.signal
-                        )
-                        testHint?.let { hint ->
-                            Text(
-                                hint,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = Anqi.palette.signal
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(32.dp))
-                SectionLabel("运行记录")
-                Spacer(Modifier.height(10.dp))
-                Surface(
-                    color = Anqi.palette.surface,
-                    shape = RoundedCornerShape(24.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(Modifier.padding(18.dp)) {
-                        Text(
-                            if (viewModel.missedCount == 0) {
-                                "没有漏掉的提醒。"
-                            } else {
-                                "有 ${viewModel.missedCount} 次到点没有响。"
-                            },
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = if (viewModel.missedCount == 0) Anqi.palette.ink else Anqi.palette.signal
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "下面是最近发生的排期、触发与被拦截记录，只存在本机。",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Anqi.palette.muted
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        if (viewModel.diagLines.isEmpty()) {
-                            Text(
-                                "还没有记录。",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = Anqi.palette.muted
-                            )
-                        } else {
-                            viewModel.diagLines.take(14).forEach { line ->
-                                Text(
-                                    line,
-                                    modifier = Modifier.padding(vertical = 2.dp),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = Anqi.palette.muted,
-                                    fontFamily = FontFamily.Monospace,
-                                    lineHeight = 16.sp
-                                )
-                            }
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            AnqiTextButton(
-                                "刷新",
-                                onClick = viewModel::refreshDiag,
-                                color = Anqi.palette.muted
-                            )
-                            AnqiTextButton(
-                                "清空",
-                                onClick = viewModel::clearDiag,
-                                color = Anqi.palette.signal
-                            )
-                        }
-                    }
-                }
-
                 Spacer(Modifier.height(22.dp))
                 SectionLabel("关于")
                 Spacer(Modifier.height(10.dp))
@@ -395,108 +284,6 @@ fun SettingsScreen(
                     }
                 }
                 Spacer(Modifier.height(30.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun SwipeTestCard(viewModel: AlarmViewModel) {
-    val verdict = viewModel.swipeVerdict
-    val pending = viewModel.swipePending
-    var hint by remember { mutableStateOf<String?>(null) }
-
-    // The countdown is the only thing on this screen that moves, so it drives its
-    // own tick: without it the seconds would sit frozen until the next 30-second
-    // recomposition and the user would think the test had stalled.
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(pending) {
-        while (pending) {
-            now = System.currentTimeMillis()
-            delay(1_000)
-        }
-    }
-
-    Surface(
-        color = Anqi.palette.surface,
-        shape = RoundedCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(Modifier.padding(18.dp)) {
-            Text(
-                when {
-                    pending -> "正在实测"
-                    verdict == null -> "先测一次，别等下个月"
-                    verdict.late -> "上次实测：响了，但迟了很久"
-                    verdict.rang && verdict.swiped -> "上次实测：通过"
-                    verdict.rang -> "上次实测：响了，但没测到清后台"
-                    else -> "上次实测：没响"
-                },
-                style = MaterialTheme.typography.titleMedium,
-                color = if (verdict != null && !verdict.rang) Anqi.palette.signal else Anqi.palette.ink
-            )
-            Spacer(Modifier.height(5.dp))
-            Text(
-                when {
-                    pending -> {
-                        val seconds = ((viewModel.swipePendingAt - now) / 1000).coerceAtLeast(0)
-                        "$seconds 秒后响铃。现在就把应用从最近任务里划掉，然后等它响——" +
-                            "别打开应用，打开了就不算数了。"
-                    }
-
-                    verdict == null ->
-                        "一分钟后就响一次。响之前把应用从最近任务划掉，看它还响不响。" +
-                            "这是唯一能确定「清后台之后还能不能提醒」的办法，不用等下个月。"
-
-                    verdict.late ->
-                        "提醒最终还是响了，但没有按时响——系统把它压了很久。这意味着夜里它也可能迟到，" +
-                            "请把下面的省电策略改成「无限制」，然后再测一次。"
-
-                    verdict.rang && verdict.swiped ->
-                        "应用被划掉、进程也没了，提醒还是响了（" +
-                            (if (verdict.path == "service") "由系统直接唤起响铃" else "由广播送达") +
-                            "）。这台手机现在是可靠的。"
-
-                    verdict.rang ->
-                        "提醒响了，说明响铃本身没问题；但进程中途没有被杀掉，" +
-                            "所以这次没测到「清后台」。想测它，请在响铃之前就划掉应用，然后先别打开它。"
-
-                    else ->
-                        "排期的那次提醒没有响。说明这台手机把应用划掉之后就冻住了，" +
-                            "系统不再给它任何触发。请先完成下面的三步设置，再测一次。"
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = Anqi.palette.muted
-            )
-            Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (pending) {
-                    AnqiTextButton(
-                        "取消实测",
-                        onClick = { viewModel.cancelSwipeTest(); hint = null },
-                        color = Anqi.palette.muted
-                    )
-                } else {
-                    AnqiTextButton(
-                        "开始实测",
-                        onClick = {
-                            val target = viewModel.startSwipeTest()
-                            hint = if (target == null) {
-                                "还没有启用的提醒，先新建一个再测。"
-                            } else {
-                                "已排期，「${target.label.ifBlank { "提醒" }}」将在一分钟后响。现在划掉应用。"
-                            }
-                        },
-                        color = Anqi.palette.signal
-                    )
-                }
-            }
-            hint?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Anqi.palette.signal
-                )
             }
         }
     }

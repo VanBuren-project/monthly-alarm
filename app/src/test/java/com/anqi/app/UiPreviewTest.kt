@@ -240,12 +240,9 @@ class UiPreviewTest {
         assertTrue(
             compose.onAllNodesWithText("系统权限").fetchSemanticsNodes().isNotEmpty()
         )
-        // 1.3.6 replaces the old "别让系统把它清掉" advice card with a measured
-        // swipe test plus a walkthrough that deep-links into the OEM screen,
-        // because advice alone was what kept failing on the user's phone.
-        assertTrue(
-            compose.onAllNodesWithText("清后台还响不响").fetchSemanticsNodes().isNotEmpty()
-        )
+        // 1.3.8 removes the measured-test and diagnostic surfaces from the app:
+        // they were field instruments for the "清后台之后还响不响" investigation,
+        // not something a user should be shown.
         assertTrue(
             compose.onAllNodesWithText("别让系统清掉它").fetchSemanticsNodes().isNotEmpty()
         )
@@ -264,29 +261,10 @@ class UiPreviewTest {
         capture("settings-360")
     }
 
-    @Test
-    @Config(qualifiers = "w360dp-h800dp-xhdpi")
-    fun phoneSettingsSwipeTestNeverRun() {
-        showHome()
-        compose.onNodeWithText("设置").performClick()
-        compose.waitForIdle()
-        // Never measured is its own state: it must not read as either pass or
-        // fail, or the user would think the phone had been verified.
-        assertTrue(
-            compose.onAllNodesWithText("先测一次，别等下个月").fetchSemanticsNodes().isNotEmpty()
-        )
-        compose.onNodeWithText("开始实测").performScrollTo()
-        compose.waitForIdle()
-        assertTrue(
-            compose.onAllNodesWithText("打开自启动设置").fetchSemanticsNodes().isNotEmpty()
-        )
-        capture("settings-swipe-360")
-    }
-
     /**
      * The three OEM steps are the actual answer to "清后台之后不响", so they get
-     * a shot of their own — scrolling to the swipe card above would leave them
-     * off-screen, and a deliverable image that cuts the fix off is worse than none.
+     * a shot of their own — a deliverable image that cuts the fix off is worse
+     * than none.
      */
     @Test
     @Config(qualifiers = "w360dp-h800dp-xhdpi")
@@ -309,40 +287,6 @@ class UiPreviewTest {
             compose.onAllNodesWithText("在最近任务里锁定本应用").fetchSemanticsNodes().isNotEmpty()
         )
         capture("settings-oem-360")
-    }
-
-    @Test
-    @Config(qualifiers = "w360dp-h800dp-xhdpi")
-    fun phoneSettingsDiagnostics() {
-        showHome()
-        compose.onNodeWithText("设置").performClick()
-        compose.waitForIdle()
-        compose.onNodeWithText("没有漏掉的提醒。").performScrollTo()
-        compose.waitForIdle()
-        assertTrue(
-            compose.onAllNodesWithText("没有漏掉的提醒。").fetchSemanticsNodes().isNotEmpty()
-        )
-        assertTrue(
-            compose.onAllNodesWithText("刷新").fetchSemanticsNodes().isNotEmpty()
-        )
-        capture("settings-diag-360")
-    }
-
-    @Test
-    @Config(qualifiers = "w360dp-h800dp-xhdpi")
-    fun phoneSettingsTestRing() {
-        showHome()
-        compose.onNodeWithText("设置").performClick()
-        compose.waitForIdle()
-        compose.onNodeWithText("10 秒后响铃").performScrollTo().performClick()
-        compose.waitForIdle()
-        // The confirmation names the reminder that will ring, so the user can
-        // tell the test apart from a real reminder when it fires.
-        val hint = "「交电费」将在 10 秒后响铃。"
-        assertTrue(compose.onAllNodesWithText(hint).fetchSemanticsNodes().isNotEmpty())
-        compose.onNodeWithText(hint).performScrollTo()
-        compose.waitForIdle()
-        capture("settings-test-360")
     }
 
     /**

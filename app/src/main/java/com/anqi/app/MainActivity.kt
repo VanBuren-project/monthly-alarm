@@ -127,10 +127,8 @@ class MainActivity : ComponentActivity() {
         // in which case onCreate never runs again.
         openRingingAlarmIfAny()
         // Opening the app is the moment the user is looking for a missing
-        // reminder, so it is also the right moment to repair the schedule and to
-        // find out whether anything was silently skipped.
-        val late = SelfHeal.heal(this, ensureGuard = true)
-        if (late > 0) viewModel.refreshDiag()
+        // reminder, so it is also the right moment to repair the schedule.
+        SelfHeal.heal(this, ensureGuard = true)
         // Last, so the startup check reads the state SelfHeal just repaired and a
         // freshly settled swipe test is already visible to it.
         viewModel.onForeground()

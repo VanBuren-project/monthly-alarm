@@ -7,7 +7,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -234,11 +233,7 @@ fun AnqiRoot(
             onMonthChange = changeMonth,
             onSelectDate = { focusDate = it },
             onWeekChange = changeWeek,
-            onToday = goToday,
-            swipeFailed = viewModel.swipeVerdict?.let { !it.rang } == true,
-            swipeLate = viewModel.swipeVerdict?.late == true,
-            missedCount = viewModel.missedCount,
-            onOpenAutostart = { viewModel.openAutostart() }
+            onToday = goToday
         )
     }
 
@@ -431,10 +426,6 @@ fun HomePane(
     onRequestDelete: () -> Unit,
     onSelectAll: () -> Unit,
     onOpenSettings: () -> Unit,
-    swipeFailed: Boolean = false,
-    swipeLate: Boolean = false,
-    missedCount: Int = 0,
-    onOpenAutostart: () -> Unit = {},
     navigationPadding: Boolean = true
 ) {
     val next = upcoming.firstOrNull()
@@ -580,19 +571,6 @@ fun HomePane(
                 if (setupHint != null) {
                     Spacer(Modifier.height(16.dp))
                     SetupBanner(hint = setupHint, onOpen = onOpenSetup)
-                }
-
-                // A measured failure outranks a missing permission: the user's
-                // phone already stayed silent once, and only a real fix clears it.
-                if (swipeFailed || swipeLate || missedCount > 0) {
-                    Spacer(Modifier.height(16.dp))
-                    SilentBanner(
-                        failedSwipe = swipeFailed,
-                        swipeLate = swipeLate,
-                        missedCount = missedCount,
-                        onOpenSettings = onOpenSettings,
-                        onOpenAutostart = onOpenAutostart
-                    )
                 }
 
                 if (upcoming.size > 1) {
@@ -790,54 +768,6 @@ private fun AlarmRow(
                     uncheckedBorderColor = Anqi.palette.line
                 )
             )
-        }
-    }
-}
-
-@Composable
-private fun SilentBanner(
-    failedSwipe: Boolean,
-    swipeLate: Boolean,
-    missedCount: Int,
-    onOpenSettings: () -> Unit,
-    onOpenAutostart: () -> Unit
-) {
-    Surface(
-        color = Anqi.palette.signalSoft,
-        shape = RoundedCornerShape(20.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
-            Text(
-                when {
-                    failedSwipe -> "清后台之后没有响"
-                    swipeLate -> "提醒会迟到"
-                    else -> "有提醒到点没响"
-                },
-                style = MaterialTheme.typography.titleMedium,
-                color = Anqi.palette.ink
-            )
-            Spacer(Modifier.height(3.dp))
-            Text(
-                when {
-                    failedSwipe ->
-                        "实测那次应用被划掉之后，系统没再把它叫起来。打开「自启动」和「省电无限制」就能解除。"
-
-                    swipeLate ->
-                        "实测那次响了，但比预定时间晚了很多。夜里省电模式会把后台冻住，" +
-                            "改成「无限制」就不会迟到。"
-
-                    else ->
-                        "已经记下 $missedCount 次。多半是系统在应用被清掉之后拦住了它。"
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = Anqi.palette.muted
-            )
-            Spacer(Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                AnqiTextButton("去设置自启动", onClick = onOpenAutostart, color = Anqi.palette.signal)
-                AnqiTextButton("查看详情", onClick = onOpenSettings, color = Anqi.palette.muted)
-            }
         }
     }
 }
