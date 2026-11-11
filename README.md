@@ -6,13 +6,15 @@
 
 ## 下载
 
-**[⬇ 下载 anqi-1.3.2.apk](https://github.com/VanBuren-project/monthly-alarm/releases/download/v1.3.2/anqi-1.3.2.apk)** · 7.1 MB（最新稳定版）
+**[⬇ 下载 anqi-1.3.8.apk](https://github.com/VanBuren-project/monthly-alarm/releases/download/v1.3.8/anqi-1.3.8.apk)** · 7.2 MB（最新稳定版）
 
-SHA-256：`BED7B94093CAB0189C19BF3251DB8C243BFBB2A5CDFF62B358D81108B9836700`
+SHA-256：`72A37C2A002DA20D372AC12DEBC25262206A0B87596C946E18CD678CED062118`
 
-> 1.3.3 至 1.3.8 已构建完成、等待真机验证，验证通过后再发布。改动说明见仓库根目录的 `release-notes-1.3.3.md`、`release-notes-1.3.4.md`、`release-notes-1.3.5.md`、`release-notes-1.3.6.md`、`release-notes-1.3.7.md` 与 `release-notes-1.3.8.md`。
+> 1.3.3 至 1.3.7 是排查「清后台还响不响」期间的中间版本，未单独发布，改动已全部包含在 1.3.8 里；1.3.8 把那些查问题时用的界面撤掉了。这一版改了什么，见 [Release 说明](https://github.com/VanBuren-project/monthly-alarm/releases/tag/v1.3.8)。
 
 也可以到 [Releases](https://github.com/VanBuren-project/monthly-alarm/releases) 页面查看更新说明与校验文件。
+
+> **国内下载慢或打不开？** `github.com` 与 `objects.githubusercontent.com` 在国内时常被限速甚至阻断。可把下载地址前面拼上加速前缀再试，例如 `https://ghproxy.net/https://github.com/VanBuren-project/monthly-alarm/releases/download/v1.3.8/anqi-1.3.8.apk`。这类前缀都是第三方服务，随时可能失效；下载后请用上面的 SHA-256 核对一遍。
 
 > **升级提示**：1.3.0 使用的是开发调试证书，1.3.1 起改用正式发布证书。两者签名不同，Android 不允许直接覆盖安装——请先卸载 1.3.0（已设的提醒会一并清除），再安装新版。从 1.3.1 起签名一致，之后可以一直直接覆盖升级，提醒数据保留。
 
@@ -143,7 +145,7 @@ SHA-256：`BED7B94093CAB0189C19BF3251DB8C243BFBB2A5CDFF62B358D81108B9836700`
 
 ## 安装
 
-1. 从 [Releases](https://github.com/VanBuren-project/monthly-alarm/releases) 下载 `anqi-1.3.2.apk`（当前已发布版本），或使用自己构建的 `app/build/outputs/apk/release/app-release.apk` 传到手机。
+1. 从 [Releases](https://github.com/VanBuren-project/monthly-alarm/releases) 下载 `anqi-1.3.8.apk`（当前已发布版本），或使用自己构建的 `app/build/outputs/apk/release/app-release.apk` 传到手机。
 2. 如果手机上装过 1.3.0 或更早的调试证书版本，先卸载再安装（签名不同，无法覆盖）。
 3. 在系统设置中允许文件管理器/浏览器「安装未知应用」。
 4. 安装并打开「月度闹钟」。
@@ -204,7 +206,7 @@ distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-bin.zip
 仓库：<https://github.com/VanBuren-project/monthly-alarm>
 发布页：<https://github.com/VanBuren-project/monthly-alarm/releases>
 
-`v1.3.2` 已发布并保持不变。`v1.3.3` 至 `v1.3.8` 的源码、APK、`RELEASE_NOTES.md` 与 `SHA256SUMS.txt` 将在真机验证通过后发布。所有 APK 使用正式发布证书签名。
+`v1.3.8` 为当前版本，资产为 `anqi-1.3.8.apk`、`RELEASE_NOTES.md`、`SHA256SUMS.txt`。`v1.3.0` 至 `v1.3.2` 保留原样不动（资产不可覆盖）。所有 APK 使用正式发布证书签名。
 
 ### 签名与密钥
 
